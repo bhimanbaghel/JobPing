@@ -1,0 +1,99 @@
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- Environment & secrets (never commit) ---
+.env
+.env.*
+!.env.example
+!.env*.example
+*.pem
+
+# --- Python / Flask ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+ENV/
+env/
+pip-log.txt
+pip-delete-this-directory.txt
+*.egg
+*.egg-info/
+.eggs/
+dist/
+build/
+*.manifest
+*.spec
+instance/
+.webassets-cache
+
+# Testing & quality
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.mypy_cache/
+.ruff_cache/
+hypothesis/
+
+# Jupyter (if used for experiments)
+.ipynb_checkpoints/
+
+# --- sentence-transformers / local model artifacts ---
+# HuggingFace hub cache if cloned or symlinked into the repo
+models/
+checkpoints/
+*.pt
+*.pth
+*.bin
+.cache/
+.huggingface/
+
+# --- Vue 3 frontend (Vite / Vue CLI) ---
+node_modules/
+dist/
+dist-ssr/
+*.local
+.npm
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-store/
+
+# Vitest / Cypress (common with Vue)
+coverage/
+cypress/videos/
+cypress/screenshots/
+
+# --- IDEs ---
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+
+# VS Code — ignore user-specific; keep team shared config if you add it later
+.vscode/*
+!.vscode/extensions.json
+!.vscode/tasks.json
+!.vscode/launch.json
+
+# --- Logs & runtime ---
+logs/
+*.log
+tmp/
+temp/
+.apscheduler/
+
+# --- Postman (optional: avoid committing env files with secrets) ---
+*postman*environment*.json
+
+# --- Database dumps (local backups) ---
+*.dump
