@@ -18,6 +18,16 @@
       </div>
 
       <button type="submit">Sign Up</button>
+
+
+            <div class="login-link">
+                    <p> Already have an account?
+                      <router-link to="/login">Login Now</router-link>
+                    </p>
+                  </div>
+
+
+
     </form>
   </div>
 </template>
