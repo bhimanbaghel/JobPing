@@ -95,8 +95,10 @@ const handleLogin = async () => {
       localStorage.setItem('refresh_token', data.refresh_token)
     }
 
-    const next = typeof route.query.next === 'string' ? route.query.next : '/welcome'
-    router.push(next.startsWith('/') ? next : '/welcome')
+    const rawNext = typeof route.query.next === 'string' ? route.query.next : '/welcome'
+    const safeNext =
+      rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : '/welcome'
+    router.push(safeNext)
   } catch (error) {
     errorMessage.value = error.message
   }
