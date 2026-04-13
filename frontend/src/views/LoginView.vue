@@ -34,12 +34,14 @@
 
 <script setup>
 import { ref } from 'vue';
+import { useRouter } from 'vue-router';
 
 const email = ref('');
 const password = ref('');
 const errorMessage = ref('');
+const router = useRouter();
 
-const handleLogin = () => {
+const handleLogin = async () => {
   errorMessage.value = '';
 
   if (!email.value || !password.value) {
@@ -47,7 +49,35 @@ const handleLogin = () => {
     return;
   }
 
-  console.log("Login payload:", { email: email.value, password: password.value });
+  try {
+    const response = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        email: email.value,
+        password: password.value
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Login failed.');
+    }
+
+    // Success - Store tokens
+    localStorage.setItem('access_token', data.access_token);
+    if (data.refresh_token) {
+      localStorage.setItem('refresh_token', data.refresh_token);
+    }
+
+    // Redirect to home or dashboard
+    router.push('/');
+  } catch (error) {
+    errorMessage.value = error.message;
+  }
 };
 </script>
 

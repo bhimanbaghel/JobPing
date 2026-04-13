@@ -1,15 +1,19 @@
 import os
 
 from dotenv import load_dotenv
+load_dotenv()
 from flask import Flask
 from flask_jwt_extended import JWTManager
+from flask_migrate import Migrate
 
 from app.config import config_by_name
+from app.models import db
 
-load_dotenv()
+
+
 
 jwt = JWTManager()
-
+migrate = Migrate()
 
 def create_app(config_name: str | None = None) -> Flask:
     if config_name is None:
@@ -20,6 +24,8 @@ def create_app(config_name: str | None = None) -> Flask:
     app.config.from_object(cfg)
 
     jwt.init_app(app)
+    db.init_app(app)
+    migrate.init_app(app, db, render_as_batch=True)
 
     from app.blueprints.auth import bp as auth_bp
     from app.blueprints.jobs import bp as jobs_bp

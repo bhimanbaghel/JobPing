@@ -39,12 +39,14 @@
 
 <script setup>
 import { ref } from 'vue';
+import { useRouter } from 'vue-router';
 
 const email = ref('');
 const password = ref('');
 const errorMessage = ref('');
+const router = useRouter();
 
-const handleRegister = () => {
+const handleRegister = async () => {
   errorMessage.value = '';
 
   if (!email.value || !password.value) {
@@ -54,14 +56,33 @@ const handleRegister = () => {
 
   if (password.value.length < 15) {
     errorMessage.value = 'Password must more than 14 characters';
-
-
-
-
     return;
   }
 
-  console.log("Register payload:", { email: email.value, password: password.value });
+  try {
+    const response = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        email: email.value,
+        password: password.value
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Registration failed.');
+    }
+
+    // Success - Store tokens and redirect
+    localStorage.setItem('access_token', data.access_token);
+    router.push('/');
+  } catch (error) {
+    errorMessage.value = error.message;
+  }
 };
 </script>
 
