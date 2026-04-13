@@ -16,7 +16,11 @@
     <main class="welcome-main">
       <section class="hero jp-glass jp-glass-strong">
         <p class="eyebrow">You are in</p>
-        <h1 class="title">Welcome back</h1>
+        <h1 class="title">
+          <template v-if="userEmail">Welcome back,</template>
+          <template v-else>Welcome back</template>
+        </h1>
+        <p v-if="userEmail" class="title-email">{{ userEmail }}</p>
         <p class="lead">
           Your JobPing workspace is ready. Track opportunities, stay ahead of the market, and
           keep your pipeline warm—all from one bright, focused hub.
@@ -40,7 +44,7 @@
         </article>
         <article class="tile jp-glass">
           <h2>Profile</h2>
-          <p class="tile-stat">{{ emailHint }}</p>
+          <p class="tile-stat">{{ profileLine }}</p>
           <p class="tile-desc">Signed in and session secured with JWT.</p>
         </article>
       </section>
@@ -49,33 +53,41 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
-const emailHint = ref('Connected')
+const userEmail = ref('')
 
-function parseJwtEmail(token) {
+function parseJwtPayload(token) {
   try {
     const payload = token.split('.')[1]
-    const json = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')))
-    return json.sub || json.email || null
+    return JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')))
   } catch {
     return null
   }
 }
 
 onMounted(() => {
+  const stored = localStorage.getItem('user_email')
+  if (stored) {
+    userEmail.value = stored
+    return
+  }
   const token = localStorage.getItem('access_token')
-  const sub = token ? parseJwtEmail(token) : null
-  if (sub) {
-    emailHint.value = sub.length > 28 ? `${sub.slice(0, 26)}…` : sub
+  const claims = token ? parseJwtPayload(token) : null
+  const sub = claims?.sub ?? claims?.email
+  if (typeof sub === 'string' && sub.includes('@')) {
+    userEmail.value = sub
   }
 })
+
+const profileLine = computed(() => userEmail.value || 'Connected')
 
 function logout() {
   localStorage.removeItem('access_token')
   localStorage.removeItem('refresh_token')
+  localStorage.removeItem('user_email')
   router.push('/login')
 }
 </script>
@@ -163,12 +175,22 @@ function logout() {
 }
 
 .title {
-  margin: 0 0 0.75rem;
+  margin: 0 0 0.35rem;
   font-size: clamp(2rem, 4vw, 2.75rem);
   font-weight: 800;
   letter-spacing: -0.03em;
   line-height: 1.1;
   color: var(--jp-text);
+}
+
+.title-email {
+  margin: 0 0 0.85rem;
+  font-size: clamp(1.15rem, 2.8vw, 1.65rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  color: var(--jp-primary);
+  word-break: break-word;
 }
 
 .lead {
@@ -230,6 +252,7 @@ function logout() {
   font-weight: 800;
   letter-spacing: -0.02em;
   color: var(--jp-text);
+  word-break: break-word;
 }
 
 .tile-desc {

@@ -94,6 +94,9 @@ const handleLogin = async () => {
     if (data.refresh_token) {
       localStorage.setItem('refresh_token', data.refresh_token)
     }
+    if (data.user?.email) {
+      localStorage.setItem('user_email', data.user.email)
+    }
 
     const rawNext = typeof route.query.next === 'string' ? route.query.next : '/welcome'
     const safeNext =
