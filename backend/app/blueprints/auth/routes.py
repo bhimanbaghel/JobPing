@@ -109,13 +109,17 @@ def login():
         return jsonify({"error": "Invalid email or password."}), 401
 
     if user.failed_login_attempts >= 5:
-        return jsonify({"error": "Account locked due to too many failed attempts. Contact support."}), 403
+        return jsonify({
+            "error": "Account locked due to too many failed attempts. Contact support at bkb45@pitt.edu.",
+        }), 403
 
     if not check_password_hash(user.password_hash, password):
         user.failed_login_attempts += 1
         db.session.commit()
         if user.failed_login_attempts >= 5:
-            return jsonify({"error": "Account locked due to too many failed attempts. Contact support."}), 403
+            return jsonify({
+                "error": "Account locked due to too many failed attempts. Contact support at bkb45@pitt.edu.",
+            }), 403
         else:
             return jsonify({"error": "Invalid email or password."}), 401
 

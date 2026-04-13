@@ -141,7 +141,7 @@ Content-Type: application/json
 |---|---|---|
 | 400 | Missing fields or non-JSON body | `{"error": "..."}` |
 | 401 | Wrong email or wrong password | `{"error": "Invalid email or password."}` |
-| 403 | Account locked (5+ failures) | `{"error": "Account locked due to too many failed attempts. Contact support."}` |
+| 403 | Account locked (5+ failures) | `{"error": "Account locked due to too many failed attempts. Contact support at bkb45@pitt.edu."}` |
 
 ---
 
