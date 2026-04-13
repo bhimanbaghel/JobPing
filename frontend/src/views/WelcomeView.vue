@@ -12,38 +12,40 @@
     </header>
 
     <main class="landing">
-      <section class="hero">
-        <p class="hero-kicker">
-          <span class="kicker-dot" aria-hidden="true" />
-          {{ loading && !userEmail ? 'Loading your session' : 'Signed in' }}
-        </p>
+      <div class="landing-row">
+        <section class="hero">
+          <p class="hero-kicker">
+            <span class="kicker-dot" aria-hidden="true" />
+            {{ loading && !userEmail ? 'Loading your session' : 'Signed in' }}
+          </p>
 
-        <h1 class="hero-title">
-          <span class="hero-welcome">Welcome</span>
-          <span v-if="displayName" class="hero-name-wrap">
-            <span class="hero-name">{{ displayName }}</span>
-          </span>
-        </h1>
+          <h1 class="hero-title">
+            <span class="hero-welcome">Welcome</span>
+            <span v-if="displayName" class="hero-name-wrap">
+              <span class="hero-name">{{ displayName }}</span>
+            </span>
+          </h1>
 
-        <p v-if="userEmail" class="hero-email">{{ userEmail }}</p>
+          <p v-if="userEmail" class="hero-email">{{ userEmail }}</p>
 
-        <div class="hero-glow-line" aria-hidden="true" />
-      </section>
+          <div class="hero-glow-line" aria-hidden="true" />
+        </section>
 
-      <section class="soon" aria-labelledby="soon-heading">
-        <div class="soon-head">
-          <h2 id="soon-heading" class="soon-heading">Coming soon</h2>
-          <span class="soon-badge">Roadmap</span>
-        </div>
-        <p class="soon-lead">
-          Preferences and matches are on the way—nothing to configure yet.
-        </p>
-        <ul class="soon-pills">
-          <li><span class="pill-glow" aria-hidden="true" />Job roles you care about</li>
-          <li><span class="pill-glow" aria-hidden="true" />Companies you want</li>
-          <li><span class="pill-glow" aria-hidden="true" />Recommendations tuned to you</li>
-        </ul>
-      </section>
+        <aside class="soon" aria-labelledby="soon-heading">
+          <div class="soon-head">
+            <h2 id="soon-heading" class="soon-heading">Coming soon</h2>
+            <span class="soon-badge">Roadmap</span>
+          </div>
+          <p class="soon-lead">
+            Preferences and matches are on the way—nothing to configure yet.
+          </p>
+          <ul class="soon-pills">
+            <li><span class="pill-glow" aria-hidden="true" />Job roles you care about</li>
+            <li><span class="pill-glow" aria-hidden="true" />Companies you want</li>
+            <li><span class="pill-glow" aria-hidden="true" />Recommendations tuned to you</li>
+          </ul>
+        </aside>
+      </div>
     </main>
   </div>
 </template>
@@ -196,7 +198,7 @@ function logout() {
 .nav {
   position: relative;
   z-index: 2;
-  max-width: 1120px;
+  max-width: 1200px;
   margin: 0 auto;
   padding: 1.25rem clamp(1.25rem, 4vw, 2rem) 0;
   display: flex;
@@ -240,19 +242,40 @@ function logout() {
 .landing {
   position: relative;
   z-index: 1;
-  max-width: 1120px;
+  max-width: 1200px;
   margin: 0 auto;
   padding: 0 clamp(1.25rem, 4vw, 2rem) clamp(2rem, 6vw, 4rem);
 }
 
+.landing-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 300px);
+  gap: clamp(1.5rem, 4vw, 3rem);
+  align-items: start;
+  min-height: calc(100vh - 5.5rem);
+}
+
+@media (max-width: 900px) {
+  .landing-row {
+    grid-template-columns: 1fr;
+    min-height: unset;
+  }
+}
+
 .hero {
-  min-height: min(78vh, 640px);
+  min-height: min(72vh, 600px);
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: flex-start;
   padding-top: clamp(1rem, 4vh, 2.5rem);
   animation: hero-in 0.9s ease-out both;
+}
+
+@media (max-width: 900px) {
+  .hero {
+    min-height: min(62vh, 520px);
+  }
 }
 
 @keyframes hero-in {
@@ -361,12 +384,24 @@ function logout() {
   box-shadow: 0 0 24px rgba(59, 130, 246, 0.35);
 }
 
-/* —— Coming soon —— */
+/* —— Coming soon (right rail) —— */
 .soon {
-  margin-top: clamp(2rem, 6vw, 3.5rem);
-  padding-top: clamp(1.75rem, 4vw, 2.5rem);
-  border-top: 1px solid rgba(148, 163, 184, 0.25);
+  margin: 0;
+  width: 100%;
+  padding: clamp(1rem, 3vh, 1.75rem) 0 clamp(1rem, 3vh, 1.75rem) clamp(1.25rem, 3vw, 2rem);
+  border-left: 1px solid rgba(148, 163, 184, 0.28);
   animation: hero-in 0.9s ease-out 0.12s both;
+  position: sticky;
+  top: 1.25rem;
+}
+
+@media (max-width: 900px) {
+  .soon {
+    padding: clamp(1.5rem, 4vw, 2rem) 0 0;
+    border-left: none;
+    border-top: 1px solid rgba(148, 163, 184, 0.28);
+    position: static;
+  }
 }
 
 .soon-head {
@@ -398,10 +433,10 @@ function logout() {
 }
 
 .soon-lead {
-  margin: 0 0 1.25rem;
-  max-width: 42ch;
-  font-size: 0.95rem;
-  line-height: 1.6;
+  margin: 0 0 1.1rem;
+  max-width: none;
+  font-size: 0.85rem;
+  line-height: 1.55;
   color: #64748b;
 }
 
@@ -411,14 +446,7 @@ function logout() {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.65rem;
-}
-
-@media (min-width: 640px) {
-  .soon-pills {
-    flex-direction: row;
-    flex-wrap: wrap;
-  }
+  gap: 0.6rem;
 }
 
 .soon-pills li {
@@ -426,11 +454,11 @@ function logout() {
   display: flex;
   align-items: center;
   gap: 0.65rem;
-  font-size: 0.88rem;
+  font-size: 0.82rem;
   font-weight: 700;
   color: #334155;
-  padding: 0.75rem 1.1rem 0.75rem 0.85rem;
-  border-radius: 16px;
+  padding: 0.7rem 0.95rem 0.7rem 0.75rem;
+  border-radius: 14px;
   background: rgba(255, 255, 255, 0.72);
   border: 1px solid rgba(255, 255, 255, 0.95);
   box-shadow: 0 8px 32px -12px rgba(15, 23, 42, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.9);
