@@ -386,7 +386,7 @@ function logout() {
 
 /* —— Coming soon (right rail) —— */
 .soon {
-  margin: 0;
+  margin: clamp(1.75rem, 4.5vh, 3.25rem) 0 0;
   width: 100%;
   padding: clamp(1rem, 3vh, 1.75rem) 0 clamp(1rem, 3vh, 1.75rem) clamp(1.25rem, 3vw, 2rem);
   border-left: 1px solid rgba(148, 163, 184, 0.28);
@@ -397,7 +397,8 @@ function logout() {
 
 @media (max-width: 900px) {
   .soon {
-    padding: clamp(1.5rem, 4vw, 2rem) 0 0;
+    margin-top: clamp(1.25rem, 3vh, 2rem);
+    padding: clamp(2rem, 5vw, 2.75rem) 0 0;
     border-left: none;
     border-top: 1px solid rgba(148, 163, 184, 0.28);
     position: static;
