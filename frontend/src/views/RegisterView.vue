@@ -1,153 +1,193 @@
 <template>
-  <div class="auth-container">
-    <h2>Register</h2>
-    <form @submit.prevent="handleRegister">
+  <div class="auth-shell">
+    <div class="auth-bg" aria-hidden="true" />
 
-      <div class="form-group">
-        <label>Email:</label>
-        <input type="email" v-model="email" required placeholder="Please enter your email" />
+    <div class="auth-card jp-glass">
+      <div class="auth-header">
+        <div class="logo-dot" aria-hidden="true" />
+        <div>
+          <p class="product">JobPing</p>
+          <h1 class="headline">Create account</h1>
+          <p class="sub">Join JobPing — use a strong password (15+ characters).</p>
+        </div>
       </div>
 
-      <div class="form-group">
-        <label>Password:</label>
-        <input type="password" v-model="password" required placeholder="To be confirmed" />
-      </div>
+      <form class="auth-form" @submit.prevent="handleRegister">
+        <div class="field">
+          <label class="jp-label" for="reg-email">Email</label>
+          <input
+            id="reg-email"
+            v-model="email"
+            class="jp-input"
+            type="email"
+            autocomplete="email"
+            required
+            placeholder="you@company.com"
+          />
+        </div>
 
-      <div v-if="errorMessage" class="error-message">
-        {{ errorMessage }}
-      </div>
+        <div class="field">
+          <label class="jp-label" for="reg-password">Password</label>
+          <input
+            id="reg-password"
+            v-model="password"
+            class="jp-input"
+            type="password"
+            autocomplete="new-password"
+            required
+            placeholder="At least 15 characters"
+          />
+        </div>
 
-      <button type="submit">Sign Up</button>
+        <div v-if="errorMessage" class="jp-error" role="alert">
+          {{ errorMessage }}
+        </div>
 
+        <button class="jp-btn" type="submit">Sign up</button>
+      </form>
 
-            <div class="login-link">
-                    <p> Already have an account?
-                      <router-link to="/login">Login Now</router-link>
-                    </p>
-                  </div>
-
-
-
-    </form>
+      <p class="footer-line">
+        Already have an account?
+        <router-link to="/login">Sign in</router-link>
+      </p>
+    </div>
   </div>
 </template>
 
-
-
-
-
-
 <script setup>
-import { ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { ref } from 'vue'
+import { useRouter } from 'vue-router'
 
-const email = ref('');
-const password = ref('');
-const errorMessage = ref('');
-const router = useRouter();
+const email = ref('')
+const password = ref('')
+const errorMessage = ref('')
+const router = useRouter()
 
 const handleRegister = async () => {
-  errorMessage.value = '';
+  errorMessage.value = ''
 
   if (!email.value || !password.value) {
-    errorMessage.value = 'Please fill in all fields.';
-    return;
+    errorMessage.value = 'Please fill in all fields.'
+    return
   }
 
   if (password.value.length < 15) {
-    errorMessage.value = 'Password must more than 14 characters';
-    return;
+    errorMessage.value = 'Password must be at least 15 characters.'
+    return
   }
 
   try {
     const response = await fetch('/api/auth/register', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
       },
       body: JSON.stringify({
         email: email.value,
-        password: password.value
-      })
-    });
+        password: password.value,
+      }),
+    })
 
-    const data = await response.json();
+    const data = await response.json()
 
     if (!response.ok) {
-      throw new Error(data.error || 'Registration failed.');
+      throw new Error(data.error || 'Registration failed.')
     }
 
-    // Success - Store tokens and redirect
-    localStorage.setItem('access_token', data.access_token);
-    router.push('/');
+    localStorage.setItem('access_token', data.access_token)
+    if (data.refresh_token) {
+      localStorage.setItem('refresh_token', data.refresh_token)
+    }
+    router.push('/welcome')
   } catch (error) {
-    errorMessage.value = error.message;
+    errorMessage.value = error.message
   }
-};
+}
 </script>
 
-
-
-
 <style scoped>
-.auth-container {
-  max-width: 400px;
-  margin: 50px auto;
-
-  padding: 30px;
-
-  border: 2px solid #ebebeb;
-  border-radius: 8px;
-
-  font-family: sans-serif;
+.auth-shell {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(1.25rem, 4vw, 2.5rem);
 }
 
+.auth-bg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(520px 420px at 88% 22%, rgba(56, 189, 248, 0.26), transparent 72%),
+    radial-gradient(460px 360px at 10% 14%, rgba(99, 102, 241, 0.2), transparent 68%);
+}
 
-.form-group {
-  margin-bottom: 20px;
+.auth-card {
+  position: relative;
+  width: min(440px, 100%);
+  padding: clamp(1.5rem, 4vw, 2.25rem);
   text-align: left;
 }
 
-
-label {
-  display: block;
-  margin-bottom: 5px;
-  font-weight: bold;
+.auth-header {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
 }
 
-
-input {
-  width: 100%;
-  padding: 10px;
-  box-sizing: border-box;
-  border: 2px solid #cccccc;
-  border-radius: 8px;
+.logo-dot {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  background: linear-gradient(145deg, #6366f1, #38bdf8 55%, #2563eb);
+  box-shadow: 0 14px 34px -12px rgba(79, 70, 229, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 
-
-button {
-  width: 100%;
-  padding: 12px;
-  background-color: #409eff;
-  color: #ffffff;
-  border: 2px solid blue;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 16px;
+.product {
+  margin: 0 0 0.2rem;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--jp-accent2);
 }
 
-
-
-
-
-.error-message {
-  color: red;
-  margin-bottom: 15px;
-  font-size: 14px;
-  text-align: left;
+.headline {
+  margin: 0 0 0.35rem;
+  font-size: 1.65rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--jp-text);
 }
 
+.sub {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.55;
+  color: var(--jp-text-soft);
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+}
+
+.footer-line {
+  margin: 1.35rem 0 0;
+  text-align: center;
+  font-size: 0.95rem;
+  color: var(--jp-text-muted);
+}
+
+.footer-line a {
+  margin-left: 0.25rem;
+}
 </style>
-
-
-
