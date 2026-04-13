@@ -3,50 +3,30 @@
     <div class="welcome-bg" aria-hidden="true" />
 
     <header class="welcome-top jp-glass">
-      <div class="brand">
-        <span class="brand-mark" aria-hidden="true" />
-        <div>
-          <p class="brand-name">JobPing</p>
-          <p class="brand-tag">Smart job signals</p>
-        </div>
-      </div>
+      <p class="brand-name">JobPing</p>
       <button type="button" class="jp-btn jp-btn-ghost" @click="logout">Sign out</button>
     </header>
 
     <main class="welcome-main">
-      <section class="hero jp-glass jp-glass-strong">
-        <p class="eyebrow">You are in</p>
-        <h1 class="title">
-          <template v-if="userEmail">Welcome back,</template>
-          <template v-else>Welcome back</template>
+      <section class="panel jp-glass jp-glass-strong">
+        <h1 class="greeting">
+          Welcome<span v-if="displayName">, {{ displayName }}</span>
         </h1>
-        <p v-if="userEmail" class="title-email">{{ userEmail }}</p>
-        <p class="lead">
-          Your JobPing workspace is ready. Track opportunities, stay ahead of the market, and
-          keep your pipeline warm—all from one bright, focused hub.
-        </p>
-        <div class="hero-actions">
-          <a class="jp-btn hero-cta" href="#tiles">Explore overview</a>
-          <span class="hint">More modules ship soon.</span>
-        </div>
-      </section>
+        <p v-if="userEmail" class="signed-in">Signed in as {{ userEmail }}</p>
+        <p v-else-if="loading" class="signed-in muted">Loading…</p>
 
-      <section id="tiles" class="tiles" aria-label="Quick overview">
-        <article class="tile jp-glass">
-          <h2>Pipeline</h2>
-          <p class="tile-stat">—</p>
-          <p class="tile-desc">Saved roles and follow-ups will appear here.</p>
-        </article>
-        <article class="tile jp-glass">
-          <h2>Alerts</h2>
-          <p class="tile-stat">Live</p>
-          <p class="tile-desc">Ping notifications when new matches land.</p>
-        </article>
-        <article class="tile jp-glass">
-          <h2>Profile</h2>
-          <p class="tile-stat">{{ profileLine }}</p>
-          <p class="tile-desc">Signed in and session secured with JWT.</p>
-        </article>
+        <div class="soon-block">
+          <h2 class="soon-title">Coming soon</h2>
+          <p class="soon-intro">
+            JobPing will use your preferences to surface roles that fit you. These features are not
+            available yet:
+          </p>
+          <ul class="soon-list">
+            <li>Preferred job roles</li>
+            <li>Preferred companies</li>
+            <li>Personalized job recommendations</li>
+          </ul>
+        </div>
       </section>
     </main>
   </div>
@@ -58,10 +38,23 @@ import { useRouter } from 'vue-router'
 
 const router = useRouter()
 const userEmail = ref('')
+const loading = ref(true)
+
+const displayName = computed(() => {
+  const e = userEmail.value
+  if (!e) return ''
+  const at = e.indexOf('@')
+  if (at <= 0) return e
+  return e.slice(0, at)
+})
 
 async function loadEmailFromUserRow() {
+  loading.value = true
   const token = localStorage.getItem('access_token')
-  if (!token) return
+  if (!token) {
+    loading.value = false
+    return
+  }
   try {
     const res = await fetch('/api/auth/me', {
       headers: { Authorization: `Bearer ${token}` },
@@ -79,14 +72,14 @@ async function loadEmailFromUserRow() {
     }
   } catch {
     /* ignore */
+  } finally {
+    loading.value = false
   }
 }
 
 onMounted(() => {
   loadEmailFromUserRow()
 })
-
-const profileLine = computed(() => userEmail.value || 'Connected')
 
 function logout() {
   localStorage.removeItem('access_token')
@@ -115,153 +108,90 @@ function logout() {
 .welcome-top {
   position: relative;
   z-index: 1;
-  max-width: 1100px;
-  margin: 0 auto 1.5rem;
-  padding: 1rem 1.25rem;
+  max-width: 560px;
+  margin: 0 auto 1.25rem;
+  padding: 0.85rem 1.1rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
 }
 
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 0.85rem;
-}
-
-.brand-mark {
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
-  background: linear-gradient(145deg, #38bdf8, #6366f1 55%, #2563eb);
-  box-shadow: 0 12px 28px -10px rgba(37, 99, 235, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.35);
-}
-
 .brand-name {
   margin: 0;
-  font-size: 1.15rem;
+  font-size: 1rem;
   font-weight: 800;
   letter-spacing: -0.02em;
   color: var(--jp-text);
-}
-
-.brand-tag {
-  margin: 0.1rem 0 0;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--jp-text-soft);
 }
 
 .welcome-main {
   position: relative;
   z-index: 1;
-  max-width: 1100px;
+  max-width: 560px;
   margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
 }
 
-.hero {
-  padding: clamp(1.5rem, 4vw, 2.75rem);
+.panel {
+  padding: clamp(1.5rem, 4vw, 2rem);
   text-align: left;
 }
 
-.eyebrow {
-  margin: 0 0 0.35rem;
-  font-size: 0.8rem;
+.greeting {
+  margin: 0 0 0.5rem;
+  font-size: clamp(1.5rem, 4vw, 1.85rem);
   font-weight: 800;
-  letter-spacing: 0.14em;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+  color: var(--jp-text);
+}
+
+.signed-in {
+  margin: 0 0 1.5rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--jp-text-muted);
+  word-break: break-word;
+}
+
+.signed-in.muted {
+  color: var(--jp-text-soft);
+}
+
+.soon-block {
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--jp-border-soft);
+}
+
+.soon-title {
+  margin: 0 0 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--jp-accent2);
 }
 
-.title {
-  margin: 0 0 0.35rem;
-  font-size: clamp(2rem, 4vw, 2.75rem);
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  line-height: 1.1;
-  color: var(--jp-text);
-}
-
-.title-email {
+.soon-intro {
   margin: 0 0 0.85rem;
-  font-size: clamp(1.15rem, 2.8vw, 1.65rem);
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  line-height: 1.25;
-  color: var(--jp-primary);
-  word-break: break-word;
-}
-
-.lead {
-  margin: 0 0 1.5rem;
-  max-width: 52ch;
-  font-size: 1.05rem;
-  line-height: 1.65;
-  color: var(--jp-text-muted);
-}
-
-.hero-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 1rem;
-}
-
-.hero-cta {
-  width: auto;
-  min-width: 200px;
-  text-decoration: none;
-  color: #fff;
-}
-
-.hero-cta:hover {
-  text-decoration: none;
-  color: #fff;
-}
-
-.hint {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--jp-text-soft);
-}
-
-.tiles {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 1rem;
-}
-
-.tile {
-  padding: 1.25rem 1.35rem;
-  text-align: left;
-}
-
-.tile h2 {
-  margin: 0 0 0.5rem;
   font-size: 0.95rem;
-  font-weight: 800;
+  line-height: 1.55;
   color: var(--jp-text-muted);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 
-.tile-stat {
-  margin: 0 0 0.35rem;
-  font-size: 1.65rem;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  color: var(--jp-text);
-  word-break: break-word;
-}
-
-.tile-desc {
+.soon-list {
   margin: 0;
-  font-size: 0.9rem;
-  line-height: 1.5;
-  color: var(--jp-text-soft);
+  padding-left: 1.15rem;
+  font-size: 0.95rem;
+  line-height: 1.65;
+  color: var(--jp-text);
+}
+
+.soon-list li {
+  margin-bottom: 0.35rem;
+}
+
+.soon-list li:last-child {
+  margin-bottom: 0;
 }
 </style>
