@@ -29,7 +29,6 @@ const router = createRouter({
 
 router.beforeEach((to) => {
   if (to.meta.requiresAuth && !isAuthenticated()) {
-    localStorage.removeItem('user_email')
     return { name: 'login', query: { next: to.fullPath } }
   }
   if (to.meta.guestOnly && isAuthenticated()) {

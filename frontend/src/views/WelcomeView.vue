@@ -59,27 +59,31 @@ import { useRouter } from 'vue-router'
 const router = useRouter()
 const userEmail = ref('')
 
-function parseJwtPayload(token) {
+async function loadEmailFromUserRow() {
+  const token = localStorage.getItem('access_token')
+  if (!token) return
   try {
-    const payload = token.split('.')[1]
-    return JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')))
+    const res = await fetch('/api/auth/me', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (res.status === 401) {
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('refresh_token')
+      router.replace({ name: 'login', query: { next: '/welcome' } })
+      return
+    }
+    if (!res.ok) return
+    const data = await res.json()
+    if (data?.email) {
+      userEmail.value = data.email
+    }
   } catch {
-    return null
+    /* ignore */
   }
 }
 
 onMounted(() => {
-  const stored = localStorage.getItem('user_email')
-  if (stored) {
-    userEmail.value = stored
-    return
-  }
-  const token = localStorage.getItem('access_token')
-  const claims = token ? parseJwtPayload(token) : null
-  const sub = claims?.sub ?? claims?.email
-  if (typeof sub === 'string' && sub.includes('@')) {
-    userEmail.value = sub
-  }
+  loadEmailFromUserRow()
 })
 
 const profileLine = computed(() => userEmail.value || 'Connected')
@@ -87,7 +91,6 @@ const profileLine = computed(() => userEmail.value || 'Connected')
 function logout() {
   localStorage.removeItem('access_token')
   localStorage.removeItem('refresh_token')
-  localStorage.removeItem('user_email')
   router.push('/login')
 }
 </script>

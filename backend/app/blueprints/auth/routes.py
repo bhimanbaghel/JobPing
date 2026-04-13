@@ -1,7 +1,12 @@
 from . import bp
 from flask import request, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
-from flask_jwt_extended import create_access_token, create_refresh_token
+from flask_jwt_extended import (
+    create_access_token,
+    create_refresh_token,
+    get_jwt_identity,
+    jwt_required,
+)
 from datetime import datetime, timezone
 from app.models import db, User
 from app.validators import validate_email_format, validate_password_nist
@@ -12,6 +17,10 @@ POST /api/auth/register
   Success:  201  { "message": "...", "access_token": "...", "user": { "id", "name", "email" } }
   Errors:   400  validation failures
             409  email already registered
+
+GET /api/auth/me
+  Headers:  Authorization: Bearer <access_token>
+  Success:  200  { "id", "email" } — email loaded from users.email (JWT sub = user id)
 """
 
 
@@ -59,7 +68,10 @@ def register():
     db.session.commit()
 
     # ── 8. Issue JWT access token ───────────────────────────────────
-    access_token = create_access_token(identity=str(new_user.id))
+    access_token = create_access_token(
+        identity=str(new_user.id),
+        additional_claims={"email": new_user.email},
+    )
 
     return jsonify({
         "message": "Registration successful.",
@@ -111,8 +123,14 @@ def login():
     user.failed_login_attempts = 0
     db.session.commit()
 
-    access_token = create_access_token(identity=str(user.id))
-    refresh_token = create_refresh_token(identity=str(user.id))
+    access_token = create_access_token(
+        identity=str(user.id),
+        additional_claims={"email": user.email},
+    )
+    refresh_token = create_refresh_token(
+        identity=str(user.id),
+        additional_claims={"email": user.email},
+    )
 
     return jsonify({
         "message": "Login successful.",
@@ -123,3 +141,19 @@ def login():
             "email": user.email,
         },
     }), 200
+
+
+@bp.route("/me", methods=["GET"])
+@jwt_required()
+def me():
+    user_id = get_jwt_identity()
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid token subject."}), 422
+
+    user = db.session.get(User, uid)
+    if user is None:
+        return jsonify({"error": "User not found."}), 404
+
+    return jsonify({"id": user.id, "email": user.email}), 200
