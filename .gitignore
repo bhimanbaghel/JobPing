@@ -97,3 +97,4 @@ temp/
 
 # --- Database dumps (local backups) ---
 *.dump
+*.db

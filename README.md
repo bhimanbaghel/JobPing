@@ -99,6 +99,7 @@ You need **both** servers running: Flask serves the JSON API; Vite serves the UI
 cd backend
 source .venv/bin/activate   # or Windows activate script above
 export FLASK_APP=wsgi:app
+flask db upgrade
 flask run
 ```
 
@@ -132,6 +133,20 @@ through the `jobs` blueprint:
 | `GET`  | `/api/jobs/<id>`                       | Full job detail for the details modal. |
 
 All three require a JWT in `Authorization: Bearer ...`.
+
+### Post-login preference gate
+
+After sign-in, JobPing checks `GET /api/profile/preferences/status`:
+
+- If at least one preferred role exists, the user is redirected to `/recommendations`.
+- If not, the user is redirected to `/preferences` first.
+
+The preferences form saves through `POST /api/profile/preferences` and enforces:
+
+- `roles[]` is required with at least one non-empty value.
+- `resume` is optional but recommended.
+- If a resume is provided, it must be a PDF and less than 5MB.
+- The backend stores parsed resume text in `resumes.parsed_text` (not raw PDF bytes).
 
 ### How matching works
 
@@ -175,6 +190,14 @@ cd backend
 source .venv/bin/activate
 EMBEDDING_BACKEND=hashing PYTHONPATH=. pytest -q
 ```
+
+### Manual frontend verification checklist
+
+1. Login with a brand-new account and confirm redirect to `/preferences`.
+2. Try saving with no role and confirm validation appears.
+3. Try uploading a non-PDF or file larger than 5MB and confirm validation appears.
+4. Save at least one role (with or without resume) and confirm redirect to `/recommendations`.
+5. Logout and login again with the same account; confirm direct redirect to `/recommendations`.
 
 ## Working with the team on Git
 
