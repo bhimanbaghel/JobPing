@@ -120,6 +120,62 @@ curl http://127.0.0.1:5000/api/health
 
 Expected: `{"status":"ok"}`.
 
+## Recommendations (FR6 / FR8 / FR9)
+
+The recommendation engine lives in `backend/app/services/` and is exposed
+through the `jobs` blueprint:
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET`  | `/api/jobs/recommendations`            | Sorted Table-3 rows for the caller. Lazily computes when empty. `?recompute=1` forces a fresh run. |
+| `POST` | `/api/jobs/recommendations/recompute`  | Force a recompute (use after preferences/resume change). |
+| `GET`  | `/api/jobs/<id>`                       | Full job detail for the details modal. |
+
+All three require a JWT in `Authorization: Bearer ...`.
+
+### How matching works
+
+1. Read `user_preferences` for the caller. **At least one role** is required (FR6.1) — otherwise the API returns `400 {"code": "missing_role_preferences"}`.
+2. Filter `jobs` by case-insensitive role match (always) and company match (when companies are set).
+3. Build the user vector — embed the uploaded resume text if present (FR6.2), or a synthesized "Looking for roles: …" string from the preferences if not (FR6.3).
+4. For each candidate job, fetch (or compute and cache) a 384-dim vector of its description.
+5. Score by cosine similarity, keep `>= 0.80`, persist into the `recommendations` table, and return sorted descending (FR6.4).
+
+### Local Postgres + pgvector
+
+Production runs on PostgreSQL with the [pgvector](https://github.com/pgvector/pgvector) extension. On macOS:
+
+```bash
+brew install pgvector
+```
+
+The Alembic migration runs `CREATE EXTENSION IF NOT EXISTS vector` automatically on Postgres connections. Tests run on in-memory SQLite using a JSON fallback column type, so you don't need pgvector to develop locally if you stick to SQLite.
+
+### Embedding backends
+
+Set `EMBEDDING_BACKEND` in `backend/.env`:
+
+- `sbert` (default) — downloads `sentence-transformers/all-MiniLM-L6-v2` (~90 MB) on first use. Real semantic similarity.
+- `hashing` — deterministic SHA1 token-hashing fallback. Used by the test suite and any environment without network access.
+
+### Seeding demo data
+
+```bash
+cd backend
+source .venv/bin/activate
+python -m scripts.seed_recommendations
+```
+
+This upserts a demo user (`demo@jobping.test` / `DemoPass-1234567890!`), four sample jobs, the demo preferences, and a matching resume, then runs the recommender.
+
+### Running the tests
+
+```bash
+cd backend
+source .venv/bin/activate
+EMBEDDING_BACKEND=hashing PYTHONPATH=. pytest -q
+```
+
 ## Working with the team on Git
 
 1. **Pull before you start** so you have the latest `main` (or your shared integration branch):
