@@ -3,6 +3,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import LoginView from '../views/LoginView.vue'
 import RegisterView from '../views/RegisterView.vue'
 import WelcomeView from '../views/WelcomeView.vue'
+import RecommendationsView from '../views/RecommendationsView.vue'
 
 function isAuthenticated() {
   return Boolean(localStorage.getItem('access_token'))
@@ -22,6 +23,12 @@ const router = createRouter({
       path: '/welcome',
       name: 'welcome',
       component: WelcomeView,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/recommendations',
+      name: 'recommendations',
+      component: RecommendationsView,
       meta: { requiresAuth: true },
     },
   ],
