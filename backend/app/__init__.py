@@ -39,4 +39,16 @@ def create_app(config_name: str | None = None) -> Flask:
     def health():
         return {"status": "ok"}
 
+    @app.cli.command("run-scrapers")
+    def _run_scrapers_cmd():
+        """Run every registered scraper and write results to the DB."""
+        import logging
+        if not logging.getLogger().handlers:
+            logging.basicConfig(
+                level=logging.INFO,
+                format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+            )
+        from scrapers.runner import run_all_scrapers
+        run_all_scrapers()
+
     return app
