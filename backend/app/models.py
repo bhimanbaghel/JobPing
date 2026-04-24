@@ -41,6 +41,8 @@ class Job(db.Model):
     country = db.Column(db.String(120))
     salary_usd = db.Column(db.Numeric(12, 2))
     posted_at = db.Column(db.Date)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    last_seen_at = db.Column(db.DateTime(timezone=True))
     created_at = db.Column(
         db.DateTime(timezone=True),
         default=_utcnow,
