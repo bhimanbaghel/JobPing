@@ -11,7 +11,12 @@ import pytest
 from app import create_app
 from app.models import Job, db
 from scrapers.base import ScrapedJob
-from scrapers.runner import parse_location, run_all_scrapers, run_single_scraper
+from scrapers.runner import (
+    clean_description,
+    parse_location,
+    run_all_scrapers,
+    run_single_scraper,
+)
 
 
 # ── parse_location ──────────────────────────────────────────────────
@@ -41,6 +46,26 @@ class TestParseLocation:
 
     def test_strips_whitespace(self):
         assert parse_location("  Paris ,  IdF , France ") == ("Paris", "IdF", "France")
+
+
+class TestCleanDescription:
+    def test_strips_html_and_unescapes_entities(self):
+        raw = "<div>Hello&nbsp;<b>World</b> &amp; team</div>"
+        assert clean_description(raw) == "Hello World & team"
+
+    def test_preserves_readable_structure_for_breaks_and_lists(self):
+        raw = (
+            "<h2>About the role</h2>"
+            "<p>Build systems<br/>with Python.</p>"
+            "<ul><li>Design APIs</li><li>Improve reliability</li></ul>"
+        )
+        assert clean_description(raw) == (
+            "About the role\n"
+            "Build systems\n"
+            "with Python.\n"
+            "- Design APIs\n"
+            "- Improve reliability"
+        )
 
 
 # ── Runner integration tests ────────────────────────────────────────
@@ -95,6 +120,7 @@ class TestRunSingleScraper:
         assert len(rows) == 2
         r = rows[0]
         assert r.role == "Backend"
+        assert r.description == "desc"
         assert r.link == "https://example.com/101"
         assert r.city == "San Francisco"
         assert r.state == "CA"
@@ -124,6 +150,41 @@ class TestRunSingleScraper:
         assert rows[0].role == "New Title"
         assert rows[0].link == "https://example.com/101"
         assert rows[0].last_seen_at is not None
+
+    def test_cleans_html_description_on_insert_and_update(self, app):
+        scraper = FakeScraper(
+            "airbnb",
+            [
+                ScrapedJob(
+                    external_id="201",
+                    title="Backend",
+                    location="Remote",
+                    description="<p>Build&nbsp;<b>APIs</b> &amp; services</p>",
+                    url="https://example.com/201",
+                    date_posted=date(2026, 4, 1),
+                )
+            ],
+        )
+        run_single_scraper(scraper)
+        row = Job.query.filter_by(company="airbnb", external_id="201").one()
+        assert row.description == "Build APIs & services"
+
+        scraper2 = FakeScraper(
+            "airbnb",
+            [
+                ScrapedJob(
+                    external_id="201",
+                    title="Backend",
+                    location="Remote",
+                    description="<div>Own <i>platform</i> reliability</div>",
+                    url="https://example.com/201",
+                    date_posted=date(2026, 4, 1),
+                )
+            ],
+        )
+        run_single_scraper(scraper2)
+        row2 = Job.query.filter_by(company="airbnb", external_id="201").one()
+        assert row2.description == "Own platform reliability"
 
     def test_deactivates_unseen_jobs(self, app):
         db.session.add_all([

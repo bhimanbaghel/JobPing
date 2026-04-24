@@ -185,8 +185,9 @@ function formatDate(iso) {
 
 function snippet(text, max = 220) {
   if (!text) return ''
-  if (text.length <= max) return text
-  return `${text.slice(0, max).trimEnd()}…`
+  const normalized = text.replace(/\n{3,}/g, '\n\n').trim()
+  if (normalized.length <= max) return normalized
+  return `${normalized.slice(0, max).trimEnd()}…`
 }
 
 function openDetails(rec) {
@@ -438,6 +439,7 @@ onMounted(() => {
   font-size: 0.92rem;
   line-height: 1.55;
   color: var(--jp-text-muted);
+  white-space: pre-line;
 }
 
 .recs-card-actions,

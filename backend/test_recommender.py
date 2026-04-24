@@ -283,6 +283,15 @@ class TestServiceLayer:
         scores = [r.similarity_score for r in rows]
         assert scores == sorted(scores, reverse=True)
 
+    def test_get_existing_role_only_prefers_latest_posted(self, app):
+        user, _ = make_user()
+        make_pref(user.id, roles=["Engineer"])
+        make_job("Engineer", "OldCo", "old", posted_at=date(2026, 1, 1))
+        make_job("Engineer", "NewCo", "new", posted_at=date(2026, 3, 1))
+        recommend_for_user(user.id)
+        rows = get_existing_recommendations(user.id)
+        assert [r.company for r in rows] == ["NewCo", "OldCo"]
+
 
 # ───────────────────────────── api tests ────────────────────────────────────
 class TestRecommendationsApi:

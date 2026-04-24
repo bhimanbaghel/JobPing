@@ -249,7 +249,12 @@ def get_existing_recommendations(user_id: int) -> List[JobRecommendation]:
         db.session.query(Recommendation, Job)
         .join(Job, Recommendation.job_id == Job.id)
         .filter(Recommendation.user_id == user_id)
-        .order_by(Recommendation.similarity_score.desc())
+        .order_by(
+            Recommendation.similarity_score.desc(),
+            Job.posted_at.desc(),
+            Job.created_at.desc(),
+            Recommendation.computed_at.desc(),
+        )
         .all()
     )
     return [_to_dto(job, rec.similarity_score) for rec, job in rows]

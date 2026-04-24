@@ -1,4 +1,6 @@
+import html
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -6,6 +8,13 @@ from app.models import Job, db
 from scrapers import SCRAPER_REGISTRY
 
 logger = logging.getLogger(__name__)
+_TAG_RE = re.compile(r"<[^>]+>")
+_LINE_BREAK_TAG_RE = re.compile(r"(?i)<\s*br\s*/?\s*>")
+_BLOCK_CLOSE_TAG_RE = re.compile(r"(?i)</\s*(p|div|section|article|ul|ol|li|h[1-6])\s*>")
+_LI_OPEN_TAG_RE = re.compile(r"(?i)<\s*li\b[^>]*>")
+_SCRIPT_STYLE_RE = re.compile(r"(?is)<\s*(script|style)\b[^>]*>.*?<\s*/\s*\1\s*>")
+_SPACE_RUN_RE = re.compile(r"[ \t]+")
+_BLANK_LINE_RE = re.compile(r"\n{3,}")
 
 
 def parse_location(raw: str) -> tuple[Optional[str], Optional[str], Optional[str]]:
@@ -22,6 +31,27 @@ def parse_location(raw: str) -> tuple[Optional[str], Optional[str], Optional[str
     if len(parts) == 2:
         return (parts[0], parts[1], None)
     return (parts[0], parts[1], ", ".join(parts[2:]))
+
+
+def clean_description(raw: str) -> str:
+    if not raw:
+        return ""
+    text = (
+        html.unescape(raw)
+        .replace("\xa0", " ")
+        .replace("\r\n", "\n")
+        .replace("\r", "\n")
+    )
+    text = _SCRIPT_STYLE_RE.sub(" ", text)
+    text = _LINE_BREAK_TAG_RE.sub("\n", text)
+    text = _BLOCK_CLOSE_TAG_RE.sub("\n", text)
+    text = _LI_OPEN_TAG_RE.sub("\n- ", text)
+    text = _TAG_RE.sub(" ", text)
+    text = _SPACE_RUN_RE.sub(" ", text)
+    lines = [line.strip() for line in text.split("\n")]
+    text = "\n".join(line for line in lines if line)
+    text = _BLANK_LINE_RE.sub("\n\n", text)
+    return text.strip()
 
 
 def run_single_scraper(scraper) -> dict:
@@ -43,11 +73,12 @@ def run_single_scraper(scraper) -> dict:
     for sj in scraped_jobs:
         seen_external_ids.add(sj.external_id)
         city, state, country = parse_location(sj.location)
+        description = clean_description(sj.description)
 
         existing = existing_by_eid.get(sj.external_id)
         if existing is not None:
             existing.role = sj.title
-            existing.description = sj.description
+            existing.description = description
             existing.link = sj.url
             existing.city = city
             existing.state = state
@@ -61,7 +92,7 @@ def run_single_scraper(scraper) -> dict:
                 company=slug,
                 external_id=sj.external_id,
                 role=sj.title,
-                description=sj.description,
+                description=description,
                 link=sj.url,
                 city=city,
                 state=state,

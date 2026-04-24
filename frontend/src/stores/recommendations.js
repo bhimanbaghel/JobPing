@@ -15,9 +15,18 @@ export const useRecommendationsStore = defineStore('recommendations', {
   }),
   getters: {
     sortedByScore(state) {
-      return [...state.items].sort(
-        (a, b) => (b.similarity_score || 0) - (a.similarity_score || 0),
-      )
+      const parseTs = (value) => {
+        if (!value) return 0
+        const ts = Date.parse(value)
+        return Number.isNaN(ts) ? 0 : ts
+      }
+      return [...state.items].sort((a, b) => {
+        const scoreDelta = (b.similarity_score || 0) - (a.similarity_score || 0)
+        if (scoreDelta !== 0) return scoreDelta
+        const postedDelta = parseTs(b.posted_at) - parseTs(a.posted_at)
+        if (postedDelta !== 0) return postedDelta
+        return (b.job_id || 0) - (a.job_id || 0)
+      })
     },
   },
   actions: {
