@@ -17,6 +17,7 @@ from __future__ import annotations
 import hashlib
 import os
 import re
+from pathlib import Path
 from typing import Iterable, List
 
 import numpy as np
@@ -24,6 +25,9 @@ import numpy as np
 from app.models import EMBEDDING_DIM, JobEmbedding, ResumeEmbedding
 
 MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+DEFAULT_CACHE_DIR = (
+    Path(__file__).resolve().parents[2] / ".cache" / "sentence_transformers"
+)
 
 _model = None
 
@@ -36,9 +40,22 @@ def get_model():
     """Return (and cache) the SentenceTransformer model."""
     global _model
     if _model is None:
+        cache_dir = Path(
+            os.environ.get("SENTENCE_TRANSFORMERS_HOME", str(DEFAULT_CACHE_DIR))
+        )
+        cache_dir.mkdir(parents=True, exist_ok=True)
+
         from sentence_transformers import SentenceTransformer  # heavy import
-        _model = SentenceTransformer(MODEL_NAME)
+        _model = SentenceTransformer(MODEL_NAME, cache_folder=str(cache_dir))
     return _model
+
+
+def warmup_model() -> bool:
+    """Load SBERT once at startup and keep weights cached on disk."""
+    if _backend() != "sbert":
+        return False
+    get_model()
+    return True
 
 
 _TOKEN_RE = re.compile(r"[A-Za-z0-9]+")

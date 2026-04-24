@@ -1,4 +1,5 @@
 import os
+import logging
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -8,6 +9,7 @@ from flask_migrate import Migrate
 
 from app.config import config_by_name
 from app.models import db
+from app.services.embeddings import warmup_model
 
 
 
@@ -34,6 +36,21 @@ def create_app(config_name: str | None = None) -> Flask:
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
     app.register_blueprint(profile_bp, url_prefix="/api/profile")
     app.register_blueprint(jobs_bp, url_prefix="/api/jobs")
+
+    should_preload = (
+        config_name != "testing"
+        and os.environ.get("PRELOAD_EMBEDDING_MODEL", "1").strip().lower()
+        not in {"0", "false", "no"}
+    )
+    if should_preload:
+        try:
+            if warmup_model():
+                app.logger.info("SBERT model preloaded and cached on disk.")
+        except Exception as exc:
+            logging.getLogger(__name__).warning(
+                "SBERT preload failed; falling back to lazy load: %s",
+                exc,
+            )
 
     @app.get("/api/health")
     def health():

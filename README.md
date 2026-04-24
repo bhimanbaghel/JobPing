@@ -172,6 +172,7 @@ Set `EMBEDDING_BACKEND` in `backend/.env`:
 
 - `sbert` (default) — downloads `sentence-transformers/all-MiniLM-L6-v2` (~90 MB) on first use. Real semantic similarity.
 - `hashing` — deterministic SHA1 token-hashing fallback. Used by the test suite and any environment without network access.
+- `PRELOAD_EMBEDDING_MODEL=1` (default) — preloads SBERT during backend startup and caches model files under `backend/.cache/sentence_transformers`, so weights are downloaded once and reused on subsequent runs.
 
 ### Seeding demo data
 
