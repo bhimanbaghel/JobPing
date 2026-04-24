@@ -1,11 +1,14 @@
 from flask import jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
+import re
 
 from app.blueprints.profile import bp
-from app.models import Resume, UserPreference, db
+from app.models import Job, Resume, UserPreference, db
 from app.services.resume_parser import ResumeParseError, extract_text_from_pdf_bytes
 
 MAX_RESUME_BYTES = 5 * 1024 * 1024
+_ROLE_NOISE_RE = re.compile(r"\([^)]*\)")
+_ROLE_SPLIT_RE = re.compile(r"\s*(?:\||/|,| - | — )\s*")
 
 
 def _current_user_id() -> int | None:
@@ -31,9 +34,37 @@ def _normalize_roles(raw_roles) -> list[str]:
     return cleaned
 
 
+def _standardize_role(raw_role: str) -> str:
+    text = (raw_role or "").strip()
+    if not text:
+        return ""
+    text = _ROLE_NOISE_RE.sub("", text).strip()
+    parts = [p.strip() for p in _ROLE_SPLIT_RE.split(text) if p.strip()]
+    return parts[0] if parts else text
+
+
 @bp.get("/health")
 def health():
     return {"blueprint": "profile"}
+
+
+@bp.get("/preferences/role-options")
+@jwt_required()
+def role_options():
+    uid = _current_user_id()
+    if uid is None:
+        return jsonify({"error": "Invalid token subject."}), 422
+
+    role_counts: dict[str, int] = {}
+    rows = db.session.query(Job.role).filter(Job.role.isnot(None)).all()
+    for (raw_role,) in rows:
+        role = _standardize_role(raw_role)
+        if not role:
+            continue
+        role_counts[role] = role_counts.get(role, 0) + 1
+
+    ordered = sorted(role_counts.items(), key=lambda t: (-t[1], t[0].lower()))
+    return jsonify({"roles": [role for role, _count in ordered]}), 200
 
 
 @bp.get("/preferences/status")

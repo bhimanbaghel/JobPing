@@ -9,22 +9,26 @@
         <div class="field">
           <label class="jp-label" for="roles">Job roles (required)</label>
           <div class="role-input-row">
-            <input
-              id="roles"
-              v-model="roleInput"
-              class="jp-input"
-              type="text"
-              placeholder="e.g. Backend Engineer"
-              @keydown.enter.prevent="addRole"
-            />
+            <select id="roles" v-model="selectedRole" class="jp-input">
+              <option value="" disabled>Select a standardized role</option>
+              <option v-for="role in roleOptions" :key="role" :value="role">
+                {{ role }}
+              </option>
+            </select>
             <button type="button" class="jp-btn-secondary" @click="addRole">Add</button>
           </div>
           <div class="role-chip-wrap">
-            <span v-for="role in roles" :key="role" class="role-chip">
+            <span v-for="role in selectedRoles" :key="role" class="role-chip">
               {{ role }}
               <button type="button" aria-label="Remove role" @click="removeRole(role)">×</button>
             </span>
           </div>
+          <p v-if="!selectedRoles.length" class="help-text">No roles selected yet.</p>
+          <datalist id="role-options-list">
+            <option v-for="role in roleOptions" :key="role" :value="role">
+              {{ role }}
+            </option>
+          </datalist>
         </div>
 
         <div class="field">
@@ -56,8 +60,9 @@ import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
-const roleInput = ref('')
-const roles = ref([])
+const roleOptions = ref([])
+const selectedRole = ref('')
+const selectedRoles = ref([])
 const resumeFile = ref(null)
 const resumeInput = ref(null)
 const errorMessage = ref('')
@@ -69,17 +74,26 @@ function authHeaders() {
   return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
+async function loadRoleOptions() {
+  const res = await fetch('/api/profile/preferences/role-options', { headers: authHeaders() })
+  if (!res.ok) return
+  const body = await res.json()
+  roleOptions.value = Array.isArray(body.roles)
+    ? body.roles.filter((r) => typeof r === 'string' && r.trim())
+    : []
+}
+
 function addRole() {
-  const next = roleInput.value.trim()
-  if (!next) return
-  if (!roles.value.includes(next)) {
-    roles.value.push(next)
+  const role = selectedRole.value
+  if (!role) return
+  if (!selectedRoles.value.includes(role)) {
+    selectedRoles.value.push(role)
   }
-  roleInput.value = ''
+  selectedRole.value = ''
 }
 
 function removeRole(role) {
-  roles.value = roles.value.filter((r) => r !== role)
+  selectedRoles.value = selectedRoles.value.filter((r) => r !== role)
 }
 
 function onResumeSelected(event) {
@@ -115,23 +129,27 @@ async function loadExistingStatus() {
   }
   if (!res.ok) return
   const body = await res.json()
-  roles.value = Array.isArray(body.roles)
+  selectedRoles.value = Array.isArray(body.roles)
     ? body.roles.filter((r) => typeof r === 'string' && r.trim())
     : []
+  for (const role of selectedRoles.value) {
+    if (!roleOptions.value.includes(role)) {
+      roleOptions.value.push(role)
+    }
+  }
 }
 
 async function savePreferences() {
   errorMessage.value = ''
   message.value = ''
-  addRole()
-  if (roles.value.length < 1) {
+  if (selectedRoles.value.length < 1) {
     errorMessage.value = 'Add at least one job role.'
     return
   }
   saving.value = true
   try {
     const formData = new FormData()
-    for (const role of roles.value) {
+    for (const role of selectedRoles.value) {
       formData.append('roles', role)
     }
     if (resumeFile.value) {
@@ -157,7 +175,9 @@ async function savePreferences() {
 }
 
 onMounted(() => {
-  loadExistingStatus()
+  loadRoleOptions()
+    .then(() => loadExistingStatus())
+    .catch(() => {})
 })
 </script>
 

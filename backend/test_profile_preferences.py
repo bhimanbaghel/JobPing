@@ -5,7 +5,7 @@ import io
 import pytest
 
 from app import create_app
-from app.models import Resume, UserPreference, db
+from app.models import Job, Resume, UserPreference, db
 
 
 @pytest.fixture()
@@ -129,3 +129,36 @@ def test_save_preferences_stores_parsed_resume_text(client, app, monkeypatch):
     body = status.get_json()
     assert body["has_preferences"] is True
     assert body["has_resume"] is True
+
+
+def test_role_options_returns_standardized_roles(client, app):
+    token = register_and_token(client)
+    with app.app_context():
+        db.session.add_all(
+            [
+                Job(
+                    role="Software Engineer (Backend) - Remote",
+                    company="acme",
+                    description="d1",
+                ),
+                Job(
+                    role="Software Engineer, Platform",
+                    company="globex",
+                    description="d2",
+                ),
+                Job(
+                    role="Data Scientist | ML",
+                    company="initech",
+                    description="d3",
+                ),
+            ]
+        )
+        db.session.commit()
+
+    r = client.get(
+        "/api/profile/preferences/role-options", headers=auth_headers(token)
+    )
+    assert r.status_code == 200
+    roles = r.get_json()["roles"]
+    assert "Software Engineer" in roles
+    assert "Data Scientist" in roles
