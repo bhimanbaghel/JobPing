@@ -31,6 +31,7 @@
           <div class="hero-glow-line" aria-hidden="true" />
         </section>
 
+        <!-- The "Coming Soon" section was removed here to prepare the WelcomeView for future feature toggles -->
         <aside class="soon" aria-labelledby="soon-heading">
           <div class="soon-head">
             <h2 id="soon-heading" class="soon-heading">Coming soon</h2>
