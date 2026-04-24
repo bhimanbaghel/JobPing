@@ -32,6 +32,28 @@
         </div>
 
         <div class="field">
+          <label class="jp-label" for="companies">Target companies (optional)</label>
+          <div class="role-input-row">
+            <input
+              id="companies"
+              v-model="selectedCompany"
+              class="jp-input"
+              type="text"
+              placeholder="E.g. Acme Corp"
+              @keydown.enter.prevent="addCompany"
+            />
+            <button type="button" class="jp-btn-secondary" @click="addCompany">Add</button>
+          </div>
+          <div class="role-chip-wrap">
+            <span v-for="company in selectedCompanies" :key="company" class="role-chip">
+              {{ company }}
+              <button type="button" aria-label="Remove company" @click="removeCompany(company)">×</button>
+            </span>
+          </div>
+          <p v-if="!selectedCompanies.length" class="help-text">No companies added.</p>
+        </div>
+
+        <div class="field">
           <label class="jp-label" for="resume">Resume (optional PDF, less than 5MB)</label>
           <input
             id="resume"
@@ -63,6 +85,8 @@ const router = useRouter()
 const roleOptions = ref([])
 const selectedRole = ref('')
 const selectedRoles = ref([])
+const selectedCompany = ref('')
+const selectedCompanies = ref([])
 const resumeFile = ref(null)
 const resumeInput = ref(null)
 const errorMessage = ref('')
@@ -94,6 +118,19 @@ function addRole() {
 
 function removeRole(role) {
   selectedRoles.value = selectedRoles.value.filter((r) => r !== role)
+}
+
+function addCompany() {
+  const company = selectedCompany.value.trim()
+  if (!company) return
+  if (!selectedCompanies.value.includes(company)) {
+    selectedCompanies.value.push(company)
+  }
+  selectedCompany.value = ''
+}
+
+function removeCompany(company) {
+  selectedCompanies.value = selectedCompanies.value.filter((c) => c !== company)
 }
 
 function onResumeSelected(event) {
@@ -132,6 +169,9 @@ async function loadExistingStatus() {
   selectedRoles.value = Array.isArray(body.roles)
     ? body.roles.filter((r) => typeof r === 'string' && r.trim())
     : []
+  selectedCompanies.value = Array.isArray(body.companies)
+    ? body.companies.filter((c) => typeof c === 'string' && c.trim())
+    : []
   for (const role of selectedRoles.value) {
     if (!roleOptions.value.includes(role)) {
       roleOptions.value.push(role)
@@ -151,6 +191,9 @@ async function savePreferences() {
     const formData = new FormData()
     for (const role of selectedRoles.value) {
       formData.append('roles', role)
+    }
+    for (const company of selectedCompanies.value) {
+      formData.append('companies', company)
     }
     if (resumeFile.value) {
       formData.append('resume', resumeFile.value)

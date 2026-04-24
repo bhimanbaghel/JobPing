@@ -43,6 +43,7 @@ def test_preferences_status_false_for_new_user(client):
     assert body["has_preferences"] is False
     assert body["has_resume"] is False
     assert body["roles"] == []
+    assert body["companies"] == []
 
 
 def test_save_preferences_requires_roles(client):
@@ -63,6 +64,20 @@ def test_save_preferences_upserts_roles(client, app):
     with app.app_context():
         pref = db.session.query(UserPreference).one()
         assert pref.roles == ["Backend Engineer", "Data Engineer"]
+
+
+def test_save_preferences_with_optional_companies(client, app):
+    token = register_and_token(client)
+    r = client.post(
+        "/api/profile/preferences",
+        headers=auth_headers(token),
+        data={"roles": ["Backend Engineer"], "companies": ["Acme", "Globex"]},
+    )
+    assert r.status_code == 200
+    with app.app_context():
+        pref = db.session.query(UserPreference).one()
+        assert pref.roles == ["Backend Engineer"]
+        assert pref.companies == ["Acme", "Globex"]
 
 
 def test_save_preferences_rejects_non_pdf_resume(client):

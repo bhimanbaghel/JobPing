@@ -78,6 +78,7 @@ def preferences_status():
     resume = db.session.query(Resume).filter_by(user_id=uid).one_or_none()
 
     roles = list(pref.roles or []) if pref is not None else []
+    companies = list(pref.companies or []) if pref is not None else []
     has_roles = any(isinstance(role, str) and role.strip() for role in roles)
     has_resume = bool(resume is not None and (resume.parsed_text or "").strip())
 
@@ -87,6 +88,7 @@ def preferences_status():
                 "has_preferences": has_roles,
                 "has_resume": has_resume,
                 "roles": roles,
+                "companies": companies,
             }
         ),
         200,
@@ -104,6 +106,13 @@ def upsert_preferences():
         roles = _normalize_roles(request.form.getlist("roles"))
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
+
+    companies = []
+    for c in request.form.getlist("companies"):
+        if isinstance(c, str):
+            c_text = c.strip()
+            if c_text:
+                companies.append(c_text)
 
     resume_file = request.files.get("resume")
     resume_text = None
@@ -127,12 +136,13 @@ def upsert_preferences():
         pref = UserPreference(
             user_id=uid,
             roles=roles,
-            companies=[],
+            companies=companies,
             locations=[],
         )
         db.session.add(pref)
     else:
         pref.roles = roles
+        pref.companies = companies
 
     if resume_text is not None:
         resume = db.session.query(Resume).filter_by(user_id=uid).one_or_none()
