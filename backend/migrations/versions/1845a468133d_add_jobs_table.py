@@ -17,6 +17,12 @@ depends_on = None
 
 
 def upgrade():
+    bind = op.get_bind()
+    insp = sa.inspect(bind)
+    if "jobs" in set(insp.get_table_names()):
+        # Recommendations migration may already create this table.
+        return
+
     op.create_table(
         'jobs',
         sa.Column('id', sa.Integer(), nullable=False),
