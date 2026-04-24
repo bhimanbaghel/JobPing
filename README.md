@@ -214,6 +214,20 @@ EMBEDDING_BACKEND=hashing PYTHONPATH=. pytest -q
 4. Save at least one role (with or without resume) and confirm redirect to `/recommendations`.
 5. Logout and login again with the same account; confirm direct redirect to `/recommendations`.
 
+## Team Members and Contributions
+
+- **Bhiman Baghel**
+- **Lakshay Agarwal**
+- **Leo Zhao**
+
+## Implemented Features
+
+- **User Profile Setup**: Allows users to input preferred job roles, optional companies, and upload a resume to match against job listings.
+- **Login Authentication Endpoint**: Secure authentication utilizing JWT, featuring account lockout mechanisms to guard against brute-force attacks.
+- **Preferences Confirmation Lock**: Adds a review step confirming preferences. Once submitted, these preferences are locked to ensure clear tracking.
+- **Optional Companies Preferences**: A refinement that makes "preferred companies" non-mandatory, preventing user blocking when no strict company bias exists.
+- **Remove Coming Soon Section**: Cleanup in the frontend views to prepare the application for real feature toggles and production layouts under the Welcome dashboard.
+
 ## Working with the team on Git
 
 1. **Pull before you start** so you have the latest `main` (or your shared integration branch):
