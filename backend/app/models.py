@@ -33,6 +33,7 @@ class Job(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     role = db.Column(db.String(255), nullable=False, index=True)
     company = db.Column(db.String(255), nullable=False, index=True)
+    external_id = db.Column(db.String(255), nullable=True)
     description = db.Column(db.Text, nullable=False)
     link = db.Column(db.String(2048))
     city = db.Column(db.String(120))
@@ -44,6 +45,10 @@ class Job(db.Model):
         db.DateTime(timezone=True),
         default=_utcnow,
         nullable=False,
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint('company', 'external_id', name='uq_jobs_company_external_id'),
     )
 
     def __repr__(self):
