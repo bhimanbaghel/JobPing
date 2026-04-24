@@ -5,12 +5,12 @@ Pipeline (FR6, US-6):
   1. Read the user's preferences (must have at least one role — FR6.1).
   2. Filter the ``jobs`` table by case-insensitive role match (always)
      and company match (when companies were specified).
-  3. Compute / fetch a 384-dim vector for the user (resume if uploaded,
-     otherwise a synthesized preferences string — FR6.3) and ensure
-     each candidate job has a cached vector.
-  4. Score each candidate by cosine similarity, keep ``score >= 0.80``
-     and persist the surviving rows into the ``recommendations`` table
-     (Table 3) for the requesting user.
+  3. If a resume exists, compute/fetch a resume vector and ensure each
+     candidate job has a cached vector.
+  4. Rank candidates:
+       - no resume: by ``posted_at`` desc, then ``created_at`` desc
+       - with resume: by cosine similarity desc
+     and persist rows into the ``recommendations`` table.
   5. Return the rows sorted descending by similarity (FR6.4).
 
 Public surface:
@@ -22,7 +22,9 @@ Public surface:
 from __future__ import annotations
 
 from dataclasses import dataclass, asdict
-from typing import List, Optional, Tuple
+from datetime import date, datetime
+import re
+from typing import List, Optional
 
 import numpy as np
 from sqlalchemy import func, or_
@@ -42,6 +44,8 @@ from app.services.embeddings import (
 )
 
 SIMILARITY_THRESHOLD = 0.80
+_ROLE_NOISE_RE = re.compile(r"\([^)]*\)")
+_ROLE_SPLIT_RE = re.compile(r"\s*(?:\||/|,| - | — )\s*")
 
 
 class RecommenderError(Exception):
@@ -101,43 +105,60 @@ def _synthesize_preferences_text(pref: UserPreference) -> str:
     )
 
 
-def _compute_user_vector(user_id: int, pref: UserPreference) -> Tuple[List[float], str]:
-    """Return (vector, source) and refresh the ResumeEmbedding cache."""
+def _standardize_role(role_text: str) -> str:
+    text = (role_text or "").strip()
+    if not text:
+        return ""
+    text = _ROLE_NOISE_RE.sub("", text).strip()
+    parts = [p.strip() for p in _ROLE_SPLIT_RE.split(text) if p.strip()]
+    return parts[0] if parts else text
+
+
+def _resume_text(user_id: int) -> Optional[str]:
     resume = (
         db.session.query(Resume).filter_by(user_id=user_id).one_or_none()
     )
-    if resume is not None and (resume.parsed_text or "").strip():
-        upsert_resume_embedding(
-            db.session, user_id, resume.parsed_text, source="resume"
-        )
-        source = "resume"
-    else:
-        upsert_resume_embedding(
-            db.session,
-            user_id,
-            _synthesize_preferences_text(pref),
-            source="preferences",
-        )
-        source = "preferences"
+    if resume is None:
+        return None
+    text = (resume.parsed_text or "").strip()
+    return text or None
+
+
+def _compute_resume_vector(user_id: int, text: str) -> List[float]:
+    """Return resume vector and refresh ResumeEmbedding cache."""
+    upsert_resume_embedding(
+        db.session, user_id, text, source="resume"
+    )
     db.session.flush()
     emb = db.session.get(ResumeEmbedding, user_id)
-    return list(emb.embedding), source
+    return list(emb.embedding)
+
+
+def _job_recency_key(job: Job) -> tuple[date, datetime]:
+    posted = job.posted_at or date.min
+    created = job.created_at or datetime.min
+    return (posted, created)
 
 
 def _filter_candidate_jobs(roles: List[str], companies: List[str]) -> List[Job]:
-    role_filters = [
-        func.lower(Job.role).contains(r.lower()) for r in roles if r
-    ]
-    if not role_filters:
+    normalized_roles = {
+        _standardize_role(r).lower() for r in roles if isinstance(r, str) and r.strip()
+    }
+    if not normalized_roles:
         return []
-    q = db.session.query(Job).filter(or_(*role_filters))
+    q = db.session.query(Job)
 
     company_filters = [
         func.lower(Job.company).contains(c.lower()) for c in companies if c
     ]
     if company_filters:
         q = q.filter(or_(*company_filters))
-    return q.all()
+    jobs = q.all()
+    return [
+        job
+        for job in jobs
+        if _standardize_role(job.role).lower() in normalized_roles
+    ]
 
 
 def _ensure_job_vector(job: Job) -> List[float]:
@@ -174,7 +195,7 @@ def recommend_for_user(
     Raises :class:`MissingRolePreferences` if FR6.1 is violated.
     """
     pref = _user_preferences(user_id)
-    user_vec, _source = _compute_user_vector(user_id, pref)
+    resume_text = _resume_text(user_id)
 
     candidates = _filter_candidate_jobs(
         list(pref.roles or []), list(pref.companies or [])
@@ -189,24 +210,28 @@ def recommend_for_user(
         db.session.commit()
         return []
 
-    user_arr = np.asarray(user_vec, dtype=np.float32)
-    user_norm = float(np.linalg.norm(user_arr))
-    if user_norm == 0.0:
-        db.session.commit()
-        return []
+    scored = []
+    if resume_text is None:
+        # No resume: do not use vector logic. Rank by recency.
+        candidates.sort(key=_job_recency_key, reverse=True)
+        scored = [(job, 1.0) for job in candidates]
+    else:
+        user_vec = _compute_resume_vector(user_id, resume_text)
+        user_arr = np.asarray(user_vec, dtype=np.float32)
+        user_norm = float(np.linalg.norm(user_arr))
+        if user_norm == 0.0:
+            db.session.commit()
+            return []
 
-    scored: List[Tuple[Job, float]] = []
-    for job in candidates:
-        job_vec = _ensure_job_vector(job)
-        job_arr = np.asarray(job_vec, dtype=np.float32)
-        job_norm = float(np.linalg.norm(job_arr))
-        if job_norm == 0.0:
-            continue
-        cos = float(np.dot(user_arr, job_arr) / (user_norm * job_norm))
-        if cos >= threshold:
+        for job in candidates:
+            job_vec = _ensure_job_vector(job)
+            job_arr = np.asarray(job_vec, dtype=np.float32)
+            job_norm = float(np.linalg.norm(job_arr))
+            if job_norm == 0.0:
+                continue
+            cos = float(np.dot(user_arr, job_arr) / (user_norm * job_norm))
             scored.append((job, cos))
-
-    scored.sort(key=lambda t: t[1], reverse=True)
+        scored.sort(key=lambda t: t[1], reverse=True)
 
     for job, score in scored:
         db.session.add(

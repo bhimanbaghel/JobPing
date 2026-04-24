@@ -3,9 +3,9 @@
 Covers:
   - FR6.1   minimum input (at least one preferred role)
   - FR6.2   matching uses preferences and resume content
-  - FR6.3   preference-only fallback when no resume is uploaded
+  - FR6.3   no-resume mode uses lexical role matching + recency ordering
   - FR6.4   recommendations are sorted by similarity (desc)
-  - 80% similarity cutoff
+  - Role phrase match gates inclusion; similarity ranks results
   - Filter by role and company
   - Persistence in the recommendations table (Table 3)
   - REST endpoints under /api/jobs/
@@ -18,6 +18,7 @@ import os
 os.environ.setdefault("EMBEDDING_BACKEND", "hashing")
 
 import pytest
+from datetime import date
 from werkzeug.security import generate_password_hash
 
 from app import create_app
@@ -102,7 +103,7 @@ class TestServiceLayer:
         with pytest.raises(MissingRolePreferences):
             recommend_for_user(user.id)
 
-    def test_fr6_3_preference_only_uses_synthesized_query(self, app):
+    def test_fr6_3_preference_only_does_not_require_resume_embeddings(self, app):
         user, _ = make_user()
         make_pref(user.id, roles=["Backend Engineer"], companies=["Acme"])
         make_job(
@@ -113,8 +114,7 @@ class TestServiceLayer:
         recs = recommend_for_user(user.id)
         assert len(recs) == 1
         emb = db.session.get(ResumeEmbedding, user.id)
-        assert emb is not None
-        assert emb.source == "preferences"
+        assert emb is None
 
     def test_resume_overrides_preferences_when_present(self, app):
         user, _ = make_user()
@@ -134,7 +134,7 @@ class TestServiceLayer:
         emb = db.session.get(ResumeEmbedding, user.id)
         assert emb.source == "resume"
 
-    def test_80_percent_cutoff_drops_low_scoring_jobs(self, app):
+    def test_role_phrase_match_includes_low_scoring_jobs(self, app):
         user, _ = make_user()
         make_pref(user.id, roles=["Backend Engineer"])
         make_job(
@@ -152,9 +152,9 @@ class TestServiceLayer:
         )
         db.session.commit()
         recs = recommend_for_user(user.id)
-        assert len(recs) == 1
-        assert recs[0].company == "Acme"
-        assert recs[0].similarity_score >= SIMILARITY_THRESHOLD
+        assert len(recs) == 2
+        assert {r.company for r in recs} == {"Acme", "Initech"}
+        assert recs[0].similarity_score >= recs[1].similarity_score
 
     def test_fr6_4_results_sorted_by_similarity_desc(self, app):
         user, _ = make_user()
@@ -179,6 +179,35 @@ class TestServiceLayer:
         db.session.commit()
         recs = recommend_for_user(user.id, threshold=0.0)
         assert {r.role for r in recs} == {"Backend Engineer"}
+
+    def test_standardized_role_match_is_exact(self, app):
+        user, _ = make_user()
+        make_pref(user.id, roles=["Software Engineer"])
+        make_job("Software Engineer, Platform", "A", "python")
+        make_job("Staff Software Engineer - Infra", "B", "python")
+        db.session.add(Resume(user_id=user.id, parsed_text="python"))
+        db.session.commit()
+        recs = recommend_for_user(user.id, threshold=0.0)
+        assert {r.company for r in recs} == {"A"}
+
+    def test_no_resume_results_sorted_by_posted_date_desc(self, app):
+        user, _ = make_user()
+        make_pref(user.id, roles=["Engineer"])
+        make_job(
+            "Engineer",
+            "OldCo",
+            "python backend",
+            posted_at=date(2026, 1, 1),
+        )
+        make_job(
+            "Engineer",
+            "NewCo",
+            "python backend",
+            posted_at=date(2026, 3, 1),
+        )
+        recs = recommend_for_user(user.id)
+        assert [r.company for r in recs] == ["NewCo", "OldCo"]
+        assert [r.similarity_score for r in recs] == [1.0, 1.0]
 
     def test_filter_by_company_applies_when_set(self, app):
         user, _ = make_user()
