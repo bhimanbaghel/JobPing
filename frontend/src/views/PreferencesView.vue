@@ -6,72 +6,113 @@
       <p class="prefs-sub">Add at least one role to generate recommendations.</p>
 
       <form class="prefs-form" @submit.prevent="savePreferences">
-        <div class="field">
-          <label class="jp-label" for="roles">Job roles (required)</label>
-          <div class="role-input-row">
-            <select id="roles" v-model="selectedRole" class="jp-input">
-              <option value="" disabled>Select a standardized role</option>
+        <div v-if="uiState === 'edit'">
+          <div class="field">
+            <label class="jp-label" for="roles">Job roles (required)</label>
+            <div class="role-input-row">
+              <select id="roles" v-model="selectedRole" class="jp-input">
+                <option value="" disabled>Select a standardized role</option>
+                <option v-for="role in roleOptions" :key="role" :value="role">
+                  {{ role }}
+                </option>
+              </select>
+              <button type="button" class="jp-btn-secondary" @click="addRole">Add</button>
+            </div>
+            <div class="role-chip-wrap">
+              <span v-for="role in selectedRoles" :key="role" class="role-chip">
+                {{ role }}
+                <button type="button" aria-label="Remove role" @click="removeRole(role)">×</button>
+              </span>
+            </div>
+            <p v-if="!selectedRoles.length" class="help-text">No roles selected yet.</p>
+            <datalist id="role-options-list">
               <option v-for="role in roleOptions" :key="role" :value="role">
                 {{ role }}
               </option>
-            </select>
-            <button type="button" class="jp-btn-secondary" @click="addRole">Add</button>
+            </datalist>
           </div>
-          <div class="role-chip-wrap">
-            <span v-for="role in selectedRoles" :key="role" class="role-chip">
-              {{ role }}
-              <button type="button" aria-label="Remove role" @click="removeRole(role)">×</button>
-            </span>
-          </div>
-          <p v-if="!selectedRoles.length" class="help-text">No roles selected yet.</p>
-          <datalist id="role-options-list">
-            <option v-for="role in roleOptions" :key="role" :value="role">
-              {{ role }}
-            </option>
-          </datalist>
-        </div>
 
-        <div class="field">
-          <label class="jp-label" for="companies">Target companies (optional)</label>
-          <div class="role-input-row">
+          <div class="field">
+            <label class="jp-label" for="companies">Target companies (optional)</label>
+            <div class="role-input-row">
+              <input
+                id="companies"
+                v-model="selectedCompany"
+                class="jp-input"
+                type="text"
+                placeholder="E.g. Acme Corp"
+                @keydown.enter.prevent="addCompany"
+              />
+              <button type="button" class="jp-btn-secondary" @click="addCompany">Add</button>
+            </div>
+            <div class="role-chip-wrap">
+              <span v-for="company in selectedCompanies" :key="company" class="role-chip">
+                {{ company }}
+                <button type="button" aria-label="Remove company" @click="removeCompany(company)">×</button>
+              </span>
+            </div>
+            <p v-if="!selectedCompanies.length" class="help-text">No companies added.</p>
+          </div>
+
+          <div class="field">
+            <label class="jp-label" for="resume">Resume (optional PDF, less than 5MB)</label>
             <input
-              id="companies"
-              v-model="selectedCompany"
+              id="resume"
+              ref="resumeInput"
               class="jp-input"
-              type="text"
-              placeholder="E.g. Acme Corp"
-              @keydown.enter.prevent="addCompany"
+              type="file"
+              accept="application/pdf,.pdf"
+              @change="onResumeSelected"
             />
-            <button type="button" class="jp-btn-secondary" @click="addCompany">Add</button>
+            <p class="help-text">Resume is optional but recommended.</p>
           </div>
-          <div class="role-chip-wrap">
-            <span v-for="company in selectedCompanies" :key="company" class="role-chip">
-              {{ company }}
-              <button type="button" aria-label="Remove company" @click="removeCompany(company)">×</button>
-            </span>
-          </div>
-          <p v-if="!selectedCompanies.length" class="help-text">No companies added.</p>
         </div>
 
-        <div class="field">
-          <label class="jp-label" for="resume">Resume (optional PDF, less than 5MB)</label>
-          <input
-            id="resume"
-            ref="resumeInput"
-            class="jp-input"
-            type="file"
-            accept="application/pdf,.pdf"
-            @change="onResumeSelected"
-          />
-          <p class="help-text">Resume is optional but recommended.</p>
+        <div v-if="uiState === 'review' || uiState === 'locked'" class="review-section">
+          <div class="field">
+            <label class="jp-label">Job roles</label>
+            <div class="role-chip-wrap">
+              <span v-for="role in selectedRoles" :key="role" class="role-chip">
+                {{ role }}
+              </span>
+            </div>
+          </div>
+          <div class="field">
+            <label class="jp-label">Target companies</label>
+            <div class="role-chip-wrap">
+              <span v-for="company in selectedCompanies" :key="company" class="role-chip">
+                {{ company }}
+              </span>
+            </div>
+            <p v-if="!selectedCompanies.length" class="help-text">None</p>
+          </div>
+          <div class="field">
+            <label class="jp-label">Resume</label>
+            <p class="help-text">{{ resumeFile ? resumeFile.name : (hasResume ? 'Uploaded previously' : 'None') }}</p>
+          </div>
         </div>
 
         <div v-if="message" class="jp-success">{{ message }}</div>
         <div v-if="errorMessage" class="jp-error" role="alert">{{ errorMessage }}</div>
 
-        <button class="jp-btn" type="submit" :disabled="saving">
-          {{ saving ? 'Saving...' : 'Save preferences' }}
-        </button>
+        <div v-if="uiState === 'edit'">
+          <button class="jp-btn" type="button" @click="goToReview">
+            Review preferences
+          </button>
+        </div>
+        
+        <div v-if="uiState === 'review'" class="action-buttons">
+          <button class="jp-btn-secondary" type="button" @click="uiState = 'edit'" :disabled="saving">
+            Back to edit
+          </button>
+          <button class="jp-btn" type="submit" :disabled="saving">
+            {{ saving ? 'Saving...' : 'Final Submit' }}
+          </button>
+        </div>
+
+        <div v-if="uiState === 'locked'">
+          <p class="jp-success">Preferences have been locked.</p>
+        </div>
       </form>
     </main>
   </div>
@@ -92,6 +133,9 @@ const resumeInput = ref(null)
 const errorMessage = ref('')
 const message = ref('')
 const saving = ref(false)
+
+const uiState = ref('edit') // 'edit' | 'review' | 'locked'
+const hasResume = ref(false)
 
 function authHeaders() {
   const token = localStorage.getItem('access_token')
@@ -172,11 +216,26 @@ async function loadExistingStatus() {
   selectedCompanies.value = Array.isArray(body.companies)
     ? body.companies.filter((c) => typeof c === 'string' && c.trim())
     : []
+  hasResume.value = body.has_resume || false
+  
+  if (body.is_locked) {
+    uiState.value = 'locked'
+  }
+
   for (const role of selectedRoles.value) {
     if (!roleOptions.value.includes(role)) {
       roleOptions.value.push(role)
     }
   }
+}
+
+function goToReview() {
+  errorMessage.value = ''
+  if (selectedRoles.value.length < 1) {
+    errorMessage.value = 'Add at least one job role.'
+    return
+  }
+  uiState.value = 'review'
 }
 
 async function savePreferences() {
@@ -198,6 +257,7 @@ async function savePreferences() {
     if (resumeFile.value) {
       formData.append('resume', resumeFile.value)
     }
+    formData.append('is_locked', 'true')
 
     const res = await fetch('/api/profile/preferences', {
       method: 'POST',
@@ -311,5 +371,23 @@ onMounted(() => {
   margin: 0;
   font-size: 0.85rem;
   color: var(--jp-text-muted);
+}
+
+.review-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.4);
+  border-radius: 12px;
+  border: 1px solid var(--jp-border-soft);
+}
+
+.action-buttons {
+  display: flex;
+  gap: 0.75rem;
+}
+.action-buttons .jp-btn, .action-buttons .jp-btn-secondary {
+  flex: 1;
 }
 </style>

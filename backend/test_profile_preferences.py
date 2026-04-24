@@ -177,3 +177,35 @@ def test_role_options_returns_standardized_roles(client, app):
     roles = r.get_json()["roles"]
     assert "Software Engineer" in roles
     assert "Data Scientist" in roles
+
+
+def test_lock_preferences_and_prevent_modification(client, app):
+    token = register_and_token(client)
+    # 1. Save and lock
+    r = client.post(
+        "/api/profile/preferences",
+        headers=auth_headers(token),
+        data={"roles": ["Backend Engineer"], "is_locked": "true"},
+    )
+    assert r.status_code == 200
+    
+    with app.app_context():
+        pref = db.session.query(UserPreference).one()
+        assert pref.roles == ["Backend Engineer"]
+        assert pref.is_locked is True
+
+    # 2. Try to modify again
+    r_modify = client.post(
+        "/api/profile/preferences",
+        headers=auth_headers(token),
+        data={"roles": ["Data Engineer"]},
+    )
+    assert r_modify.status_code == 403
+    assert "locked" in r_modify.get_json()["error"].lower()
+
+    # 3. Check status
+    r_status = client.get("/api/profile/preferences/status", headers=auth_headers(token))
+    assert r_status.status_code == 200
+    body = r_status.get_json()
+    assert body["is_locked"] is True
+
