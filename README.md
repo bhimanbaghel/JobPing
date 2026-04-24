@@ -151,10 +151,24 @@ The preferences form saves through `POST /api/profile/preferences` and enforces:
 ### How matching works
 
 1. Read `user_preferences` for the caller. **At least one role** is required (FR6.1) — otherwise the API returns `400 {"code": "missing_role_preferences"}`.
-2. Filter `jobs` by case-insensitive role match (always) and company match (when companies are set).
-3. Build the user vector — embed the uploaded resume text if present (FR6.2), or a synthesized "Looking for roles: …" string from the preferences if not (FR6.3).
-4. For each candidate job, fetch (or compute and cache) a 384-dim vector of its description.
-5. Score by cosine similarity, keep `>= 0.80`, persist into the `recommendations` table, and return sorted descending (FR6.4).
+2. Filter `jobs` by standardized role match (always) and company match (when companies are set).
+3. If no resume exists:
+   - vector logic is bypassed entirely;
+   - candidates are ranked by recency (`posted_at` desc, then `created_at` desc);
+   - score is set to `1.0` (100%) for each returned row.
+4. If a resume exists:
+   - build a resume embedding from normalized resume text plus extracted key terms;
+   - build/fetch each job embedding from `role + company + description`;
+   - compute a raw hybrid score:
+     - `semantic = (cosine + 1) / 2`
+     - `overlap = |resume_terms ∩ job_terms| / |resume_terms|`
+     - `raw = 0.70 * semantic + 0.30 * overlap`
+   - sort by `raw` descending.
+5. Calibrate resume-mode display scores to a user-friendly range while preserving ranking order:
+   - `calibrated = 0.55 + ((raw - min_raw) / (max_raw - min_raw)) * (0.98 - 0.55)`
+   - if all raw scores are equal, apply a very small rank-based decay from `0.98` down toward `0.55`.
+6. Apply a resume-mode threshold and keep only rows with `score >= 0.80` (default `SIMILARITY_THRESHOLD`).
+7. Persist results into `recommendations` and return rows sorted by recency (`posted_at`, then `created_at`). Similarity score is used for filtering/scoring, not final ordering.
 
 ### Local Postgres + pgvector
 

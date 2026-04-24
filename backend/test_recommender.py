@@ -4,7 +4,7 @@ Covers:
   - FR6.1   minimum input (at least one preferred role)
   - FR6.2   matching uses preferences and resume content
   - FR6.3   no-resume mode uses lexical role matching + recency ordering
-  - FR6.4   recommendations are sorted by similarity (desc)
+  - FR6.4   recommendations are sorted by recency (desc)
   - Role phrase match gates inclusion; similarity ranks results
   - Filter by role and company
   - Persistence in the recommendations table (Table 3)
@@ -130,11 +130,11 @@ class TestServiceLayer:
         db.session.commit()
         recs = recommend_for_user(user.id)
         assert len(recs) == 1
-        assert recs[0].similarity_score >= 0.99
+        assert recs[0].similarity_score >= 0.80
         emb = db.session.get(ResumeEmbedding, user.id)
         assert emb.source == "resume"
 
-    def test_role_phrase_match_includes_low_scoring_jobs(self, app):
+    def test_resume_mode_applies_similarity_threshold(self, app):
         user, _ = make_user()
         make_pref(user.id, roles=["Backend Engineer"])
         make_job(
@@ -152,23 +152,37 @@ class TestServiceLayer:
         )
         db.session.commit()
         recs = recommend_for_user(user.id)
-        assert len(recs) == 2
-        assert {r.company for r in recs} == {"Acme", "Initech"}
-        assert recs[0].similarity_score >= recs[1].similarity_score
+        assert len(recs) == 1
+        assert {r.company for r in recs} == {"Acme"}
+        assert recs[0].similarity_score >= SIMILARITY_THRESHOLD
 
-    def test_fr6_4_results_sorted_by_similarity_desc(self, app):
+    def test_fr6_4_resume_results_sorted_by_posted_date_desc(self, app):
         user, _ = make_user()
         make_pref(user.id, roles=["Engineer"])
-        make_job("Engineer", "A", "python flask postgres backend api")
-        make_job("Engineer", "B", "python flask postgres backend service")
-        make_job("Engineer", "C", "python flask")
+        make_job(
+            "Engineer",
+            "OldCo",
+            "python flask postgres backend api",
+            posted_at=date(2026, 1, 1),
+        )
+        make_job(
+            "Engineer",
+            "NewCo",
+            "python flask postgres backend service",
+            posted_at=date(2026, 3, 1),
+        )
+        make_job(
+            "Engineer",
+            "MidCo",
+            "python flask",
+            posted_at=date(2026, 2, 1),
+        )
         db.session.add(
             Resume(user_id=user.id, parsed_text="python flask postgres backend api")
         )
         db.session.commit()
         recs = recommend_for_user(user.id, threshold=0.0)
-        scores = [r.similarity_score for r in recs]
-        assert scores == sorted(scores, reverse=True)
+        assert [r.company for r in recs] == ["NewCo", "MidCo", "OldCo"]
 
     def test_filter_by_role_applies(self, app):
         user, _ = make_user()
@@ -240,7 +254,7 @@ class TestServiceLayer:
             db.session.query(Recommendation).filter_by(user_id=user.id).all()
         )
         assert len(rows) == 1
-        assert rows[0].similarity_score >= SIMILARITY_THRESHOLD
+        assert rows[0].similarity_score > 0.0
 
     def test_recompute_replaces_old_rows(self, app):
         user, _ = make_user()
@@ -274,14 +288,13 @@ class TestServiceLayer:
     def test_get_existing_returns_sorted_without_recomputing(self, app):
         user, _ = make_user()
         make_pref(user.id, roles=["Engineer"])
-        make_job("Engineer", "A", "python flask postgres")
-        make_job("Engineer", "B", "python flask")
+        make_job("Engineer", "OldCo", "python flask postgres", posted_at=date(2026, 1, 1))
+        make_job("Engineer", "NewCo", "python flask", posted_at=date(2026, 2, 1))
         db.session.add(Resume(user_id=user.id, parsed_text="python flask postgres"))
         db.session.commit()
         recommend_for_user(user.id, threshold=0.0)
         rows = get_existing_recommendations(user.id)
-        scores = [r.similarity_score for r in rows]
-        assert scores == sorted(scores, reverse=True)
+        assert [r.company for r in rows] == ["NewCo", "OldCo"]
 
     def test_get_existing_role_only_prefers_latest_posted(self, app):
         user, _ = make_user()

@@ -21,10 +21,10 @@ export const useRecommendationsStore = defineStore('recommendations', {
         return Number.isNaN(ts) ? 0 : ts
       }
       return [...state.items].sort((a, b) => {
-        const scoreDelta = (b.similarity_score || 0) - (a.similarity_score || 0)
-        if (scoreDelta !== 0) return scoreDelta
         const postedDelta = parseTs(b.posted_at) - parseTs(a.posted_at)
         if (postedDelta !== 0) return postedDelta
+        const scoreDelta = (b.similarity_score || 0) - (a.similarity_score || 0)
+        if (scoreDelta !== 0) return scoreDelta
         return (b.job_id || 0) - (a.job_id || 0)
       })
     },

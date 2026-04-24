@@ -9,9 +9,9 @@ Pipeline (FR6, US-6):
      candidate job has a cached vector.
   4. Rank candidates:
        - no resume: by ``posted_at`` desc, then ``created_at`` desc
-       - with resume: by cosine similarity desc
+      - with resume: compute score, then final sort by recency
      and persist rows into the ``recommendations`` table.
-  5. Return the rows sorted descending by similarity (FR6.4).
+  5. Return rows sorted by recency.
 
 Public surface:
 
@@ -46,6 +46,16 @@ from app.services.embeddings import (
 SIMILARITY_THRESHOLD = 0.80
 _ROLE_NOISE_RE = re.compile(r"\([^)]*\)")
 _ROLE_SPLIT_RE = re.compile(r"\s*(?:\||/|,| - | — )\s*")
+_TOKEN_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9+#.\-]*")
+_STOPWORDS = {
+    "a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "in",
+    "into", "is", "it", "of", "on", "or", "that", "the", "to", "with",
+    "you", "your", "we", "our", "this", "will", "can", "have", "has",
+}
+_SEMANTIC_WEIGHT = 0.70
+_OVERLAP_WEIGHT = 0.30
+_CALIBRATED_MIN = 0.55
+_CALIBRATED_MAX = 0.98
 
 
 class RecommenderError(Exception):
@@ -124,10 +134,21 @@ def _resume_text(user_id: int) -> Optional[str]:
     return text or None
 
 
+def _prepare_resume_text_for_embedding(text: str) -> str:
+    """Compact resume text so embeddings focus on strongest signals."""
+    cleaned = " ".join((text or "").split())
+    terms = sorted(_extract_terms(cleaned))
+    if not terms:
+        return cleaned
+    top_terms = ", ".join(terms[:80])
+    return f"{cleaned}\n\nKey skills and terms: {top_terms}"
+
+
 def _compute_resume_vector(user_id: int, text: str) -> List[float]:
     """Return resume vector and refresh ResumeEmbedding cache."""
+    embedding_text = _prepare_resume_text_for_embedding(text)
     upsert_resume_embedding(
-        db.session, user_id, text, source="resume"
+        db.session, user_id, embedding_text, source="resume"
     )
     db.session.flush()
     emb = db.session.get(ResumeEmbedding, user_id)
@@ -164,10 +185,82 @@ def _filter_candidate_jobs(roles: List[str], companies: List[str]) -> List[Job]:
 def _ensure_job_vector(job: Job) -> List[float]:
     emb = db.session.get(JobEmbedding, job.id)
     if emb is None:
-        upsert_job_embedding(db.session, job.id, job.description or "")
+        upsert_job_embedding(
+            db.session,
+            job.id,
+            _prepare_job_text_for_embedding(job),
+        )
         db.session.flush()
         emb = db.session.get(JobEmbedding, job.id)
     return list(emb.embedding)
+
+
+def _prepare_job_text_for_embedding(job: Job) -> str:
+    parts = [job.role or "", job.company or "", job.description or ""]
+    return " ".join(p.strip() for p in parts if p and p.strip())
+
+
+def _extract_terms(text: str) -> set[str]:
+    terms: set[str] = set()
+    for token in _TOKEN_RE.findall((text or "").lower()):
+        if len(token) < 2 or token in _STOPWORDS:
+            continue
+        terms.add(token)
+    return terms
+
+
+def _skill_overlap_score(resume_text: str, job: Job) -> float:
+    resume_terms = _extract_terms(resume_text)
+    if not resume_terms:
+        return 0.0
+    job_terms = _extract_terms(_prepare_job_text_for_embedding(job))
+    if not job_terms:
+        return 0.0
+    overlap = len(resume_terms & job_terms)
+    # Recall-style overlap: how much of candidate profile appears in the job.
+    return overlap / len(resume_terms)
+
+
+def _hybrid_score(cosine: float, overlap: float) -> float:
+    semantic = max(-1.0, min(1.0, cosine))
+    semantic_01 = (semantic + 1.0) / 2.0
+    score = (_SEMANTIC_WEIGHT * semantic_01) + (_OVERLAP_WEIGHT * overlap)
+    return max(0.0, min(1.0, score))
+
+
+def _calibrate_resume_scores(
+    scored: List[tuple[Job, float]]
+) -> List[tuple[Job, float]]:
+    """Map raw hybrid scores into a user-friendly percentage band.
+
+    Calibration is monotonic, so ranking order is preserved.
+    """
+    if not scored:
+        return scored
+
+    raws = [score for _job, score in scored]
+    lo = min(raws)
+    hi = max(raws)
+    spread = hi - lo
+
+    if spread <= 1e-8:
+        # Degenerate case: equal raw scores. Use a gentle rank decay so
+        # list order remains stable and scores do not all display identical.
+        out: List[tuple[Job, float]] = []
+        step = min(0.01, (_CALIBRATED_MAX - _CALIBRATED_MIN) / max(len(scored), 1))
+        for idx, (job, _raw) in enumerate(scored):
+            calibrated = max(_CALIBRATED_MIN, _CALIBRATED_MAX - (idx * step))
+            out.append((job, calibrated))
+        return out
+
+    out: List[tuple[Job, float]] = []
+    for job, raw in scored:
+        norm = (raw - lo) / spread
+        calibrated = _CALIBRATED_MIN + (
+            (_CALIBRATED_MAX - _CALIBRATED_MIN) * norm
+        )
+        out.append((job, max(0.0, min(1.0, calibrated))))
+    return out
 
 
 def _to_dto(job: Job, score: float) -> JobRecommendation:
@@ -230,8 +323,12 @@ def recommend_for_user(
             if job_norm == 0.0:
                 continue
             cos = float(np.dot(user_arr, job_arr) / (user_norm * job_norm))
-            scored.append((job, cos))
+            overlap = _skill_overlap_score(resume_text, job)
+            scored.append((job, _hybrid_score(cos, overlap)))
         scored.sort(key=lambda t: t[1], reverse=True)
+        scored = _calibrate_resume_scores(scored)
+        scored = [(job, score) for job, score in scored if score >= threshold]
+        scored.sort(key=lambda t: _job_recency_key(t[0]), reverse=True)
 
     for job, score in scored:
         db.session.add(
@@ -250,9 +347,9 @@ def get_existing_recommendations(user_id: int) -> List[JobRecommendation]:
         .join(Job, Recommendation.job_id == Job.id)
         .filter(Recommendation.user_id == user_id)
         .order_by(
-            Recommendation.similarity_score.desc(),
             Job.posted_at.desc(),
             Job.created_at.desc(),
+            Recommendation.similarity_score.desc(),
             Recommendation.computed_at.desc(),
         )
         .all()
