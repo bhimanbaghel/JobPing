@@ -81,6 +81,7 @@ def preferences_status():
     companies = list(pref.companies or []) if pref is not None else []
     has_roles = any(isinstance(role, str) and role.strip() for role in roles)
     has_resume = bool(resume is not None and (resume.parsed_text or "").strip())
+    is_locked = bool(pref.is_locked) if pref is not None else False
 
     return (
         jsonify(
@@ -89,6 +90,7 @@ def preferences_status():
                 "has_resume": has_resume,
                 "roles": roles,
                 "companies": companies,
+                "is_locked": is_locked,
             }
         ),
         200,
@@ -101,6 +103,10 @@ def upsert_preferences():
     uid = _current_user_id()
     if uid is None:
         return jsonify({"error": "Invalid token subject."}), 422
+
+    pref = db.session.query(UserPreference).filter_by(user_id=uid).one_or_none()
+    if pref is not None and pref.is_locked:
+        return jsonify({"error": "Preferences are locked and cannot be modified."}), 403
 
     try:
         roles = _normalize_roles(request.form.getlist("roles"))
@@ -143,6 +149,11 @@ def upsert_preferences():
     else:
         pref.roles = roles
         pref.companies = companies
+
+    # Check for is_locked form parameter
+    is_locked_str = request.form.get("is_locked", "false").lower()
+    if is_locked_str in ("true", "1", "yes"):
+        pref.is_locked = True
 
     if resume_text is not None:
         resume = db.session.query(Resume).filter_by(user_id=uid).one_or_none()

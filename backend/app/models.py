@@ -130,6 +130,7 @@ class UserPreference(db.Model):
     roles = db.Column(db.JSON, nullable=False, default=list)
     companies = db.Column(db.JSON, nullable=False, default=list)
     locations = db.Column(db.JSON, nullable=False, default=list)
+    is_locked = db.Column(db.Boolean, nullable=False, default=False)
     updated_at = db.Column(
         db.DateTime(timezone=True),
         default=_utcnow,
