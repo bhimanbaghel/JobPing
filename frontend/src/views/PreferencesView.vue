@@ -35,14 +35,12 @@
           <div class="field">
             <label class="jp-label" for="companies">Target companies (optional)</label>
             <div class="role-input-row">
-              <input
-                id="companies"
-                v-model="selectedCompany"
-                class="jp-input"
-                type="text"
-                placeholder="E.g. Acme Corp"
-                @keydown.enter.prevent="addCompany"
-              />
+              <select id="companies" v-model="selectedCompany" class="jp-input">
+                <option value="" disabled>Select a company</option>
+                <option v-for="company in companyOptions" :key="company" :value="company">
+                  {{ company }}
+                </option>
+              </select>
               <button type="button" class="jp-btn-secondary" @click="addCompany">Add</button>
             </div>
             <div class="role-chip-wrap">
@@ -52,6 +50,11 @@
               </span>
             </div>
             <p v-if="!selectedCompanies.length" class="help-text">No companies added.</p>
+            <datalist id="company-options-list">
+              <option v-for="company in companyOptions" :key="company" :value="company">
+                {{ company }}
+              </option>
+            </datalist>
           </div>
 
           <div class="field">
@@ -126,6 +129,7 @@ const router = useRouter()
 const roleOptions = ref([])
 const selectedRole = ref('')
 const selectedRoles = ref([])
+const companyOptions = ref([])
 const selectedCompany = ref('')
 const selectedCompanies = ref([])
 const resumeFile = ref(null)
@@ -148,6 +152,15 @@ async function loadRoleOptions() {
   const body = await res.json()
   roleOptions.value = Array.isArray(body.roles)
     ? body.roles.filter((r) => typeof r === 'string' && r.trim())
+    : []
+}
+
+async function loadCompanyOptions() {
+  const res = await fetch('/api/profile/preferences/company-options', { headers: authHeaders() })
+  if (!res.ok) return
+  const body = await res.json()
+  companyOptions.value = Array.isArray(body.companies)
+    ? body.companies.filter((c) => typeof c === 'string' && c.trim())
     : []
 }
 
@@ -227,6 +240,12 @@ async function loadExistingStatus() {
       roleOptions.value.push(role)
     }
   }
+
+  for (const company of selectedCompanies.value) {
+    if (!companyOptions.value.includes(company)) {
+      companyOptions.value.push(company)
+    }
+  }
 }
 
 function goToReview() {
@@ -278,7 +297,7 @@ async function savePreferences() {
 }
 
 onMounted(() => {
-  loadRoleOptions()
+  Promise.all([loadRoleOptions(), loadCompanyOptions()])
     .then(() => loadExistingStatus())
     .catch(() => {})
 })

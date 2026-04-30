@@ -179,6 +179,34 @@ def test_role_options_returns_standardized_roles(client, app):
     assert "Data Scientist" in roles
 
 
+def test_company_options_returns_standardized_companies(client, app):
+    token = register_and_token(client)
+    with app.app_context():
+        db.session.add_all(
+            [
+                Job(
+                    role="Software Engineer",
+                    company=" Acme Corp ",
+                    description="d1",
+                ),
+                Job(
+                    role="Data Engineer",
+                    company="Globex",
+                    description="d2",
+                ),
+            ]
+        )
+        db.session.commit()
+
+    r = client.get(
+        "/api/profile/preferences/company-options", headers=auth_headers(token)
+    )
+    assert r.status_code == 200
+    companies = r.get_json()["companies"]
+    assert "Acme Corp" in companies
+    assert "Globex" in companies
+
+
 def test_lock_preferences_and_prevent_modification(client, app):
     token = register_and_token(client)
     # 1. Save and lock

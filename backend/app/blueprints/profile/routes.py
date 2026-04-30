@@ -67,6 +67,25 @@ def role_options():
     return jsonify({"roles": [role for role, _count in ordered]}), 200
 
 
+@bp.get("/preferences/company-options")
+@jwt_required()
+def company_options():
+    uid = _current_user_id()
+    if uid is None:
+        return jsonify({"error": "Invalid token subject."}), 422
+
+    company_counts: dict[str, int] = {}
+    rows = db.session.query(Job.company).filter(Job.company.isnot(None)).all()
+    for (raw_company,) in rows:
+        company = (raw_company or "").strip()
+        if not company:
+            continue
+        company_counts[company] = company_counts.get(company, 0) + 1
+
+    ordered = sorted(company_counts.items(), key=lambda t: (-t[1], t[0].lower()))
+    return jsonify({"companies": [comp for comp, _count in ordered]}), 200
+
+
 @bp.get("/preferences/status")
 @jwt_required()
 def preferences_status():

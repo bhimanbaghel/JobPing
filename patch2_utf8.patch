@@ -1,0 +1,500 @@
+﻿diff --git a/backend/app/blueprints/profile/routes.py b/backend/app/blueprints/profile/routes.py
+index 4707718..5d90860 100644
+--- a/backend/app/blueprints/profile/routes.py
++++ b/backend/app/blueprints/profile/routes.py
+@@ -81,6 +81,7 @@ def preferences_status():
+     companies = list(pref.companies or []) if pref is not None else []
+     has_roles = any(isinstance(role, str) and role.strip() for role in roles)
+     has_resume = bool(resume is not None and (resume.parsed_text or "").strip())
++    is_locked = bool(pref.is_locked) if pref is not None else False
+ 
+     return (
+         jsonify(
+@@ -89,6 +90,7 @@ def preferences_status():
+                 "has_resume": has_resume,
+                 "roles": roles,
+                 "companies": companies,
++                "is_locked": is_locked,
+             }
+         ),
+         200,
+@@ -102,6 +104,10 @@ def upsert_preferences():
+     if uid is None:
+         return jsonify({"error": "Invalid token subject."}), 422
+ 
++    pref = db.session.query(UserPreference).filter_by(user_id=uid).one_or_none()
++    if pref is not None and pref.is_locked:
++        return jsonify({"error": "Preferences are locked and cannot be modified."}), 403
++
+     try:
+         roles = _normalize_roles(request.form.getlist("roles"))
+     except ValueError as exc:
+@@ -144,6 +150,11 @@ def upsert_preferences():
+         pref.roles = roles
+         pref.companies = companies
+ 
++    # Check for is_locked form parameter
++    is_locked_str = request.form.get("is_locked", "false").lower()
++    if is_locked_str in ("true", "1", "yes"):
++        pref.is_locked = True
++
+     if resume_text is not None:
+         resume = db.session.query(Resume).filter_by(user_id=uid).one_or_none()
+         if resume is None:
+diff --git a/backend/app/models.py b/backend/app/models.py
+index b9ebb66..f3b07bb 100644
+--- a/backend/app/models.py
++++ b/backend/app/models.py
+@@ -130,6 +130,7 @@ class UserPreference(db.Model):
+     roles = db.Column(db.JSON, nullable=False, default=list)
+     companies = db.Column(db.JSON, nullable=False, default=list)
+     locations = db.Column(db.JSON, nullable=False, default=list)
++    is_locked = db.Column(db.Boolean, nullable=False, default=False)
+     updated_at = db.Column(
+         db.DateTime(timezone=True),
+         default=_utcnow,
+diff --git a/backend/test_profile_preferences.py b/backend/test_profile_preferences.py
+index 4138465..89bb455 100644
+--- a/backend/test_profile_preferences.py
++++ b/backend/test_profile_preferences.py
+@@ -177,3 +177,35 @@ def test_role_options_returns_standardized_roles(client, app):
+     roles = r.get_json()["roles"]
+     assert "Software Engineer" in roles
+     assert "Data Scientist" in roles
++
++
++def test_lock_preferences_and_prevent_modification(client, app):
++    token = register_and_token(client)
++    # 1. Save and lock
++    r = client.post(
++        "/api/profile/preferences",
++        headers=auth_headers(token),
++        data={"roles": ["Backend Engineer"], "is_locked": "true"},
++    )
++    assert r.status_code == 200
++    
++    with app.app_context():
++        pref = db.session.query(UserPreference).one()
++        assert pref.roles == ["Backend Engineer"]
++        assert pref.is_locked is True
++
++    # 2. Try to modify again
++    r_modify = client.post(
++        "/api/profile/preferences",
++        headers=auth_headers(token),
++        data={"roles": ["Data Engineer"]},
++    )
++    assert r_modify.status_code == 403
++    assert "locked" in r_modify.get_json()["error"].lower()
++
++    # 3. Check status
++    r_status = client.get("/api/profile/preferences/status", headers=auth_headers(token))
++    assert r_status.status_code == 200
++    body = r_status.get_json()
++    assert body["is_locked"] is True
++
+diff --git a/frontend/src/views/PreferencesView.vue b/frontend/src/views/PreferencesView.vue
+index 1cd6c01..9626312 100644
+--- a/frontend/src/views/PreferencesView.vue
++++ b/frontend/src/views/PreferencesView.vue
+@@ -6,72 +6,113 @@
+       <p class="prefs-sub">Add at least one role to generate recommendations.</p>
+ 
+       <form class="prefs-form" @submit.prevent="savePreferences">
+-        <div class="field">
+-          <label class="jp-label" for="roles">Job roles (required)</label>
+-          <div class="role-input-row">
+-            <select id="roles" v-model="selectedRole" class="jp-input">
+-              <option value="" disabled>Select a standardized role</option>
++        <div v-if="uiState === 'edit'">
++          <div class="field">
++            <label class="jp-label" for="roles">Job roles (required)</label>
++            <div class="role-input-row">
++              <select id="roles" v-model="selectedRole" class="jp-input">
++                <option value="" disabled>Select a standardized role</option>
++                <option v-for="role in roleOptions" :key="role" :value="role">
++                  {{ role }}
++                </option>
++              </select>
++              <button type="button" class="jp-btn-secondary" @click="addRole">Add</button>
++            </div>
++            <div class="role-chip-wrap">
++              <span v-for="role in selectedRoles" :key="role" class="role-chip">
++                {{ role }}
++                <button type="button" aria-label="Remove role" @click="removeRole(role)">脳</button>
++              </span>
++            </div>
++            <p v-if="!selectedRoles.length" class="help-text">No roles selected yet.</p>
++            <datalist id="role-options-list">
+               <option v-for="role in roleOptions" :key="role" :value="role">
+                 {{ role }}
+               </option>
+-            </select>
+-            <button type="button" class="jp-btn-secondary" @click="addRole">Add</button>
++            </datalist>
+           </div>
+-          <div class="role-chip-wrap">
+-            <span v-for="role in selectedRoles" :key="role" class="role-chip">
+-              {{ role }}
+-              <button type="button" aria-label="Remove role" @click="removeRole(role)">脳</button>
+-            </span>
++
++          <div class="field">
++            <label class="jp-label" for="companies">Target companies (optional)</label>
++            <div class="role-input-row">
++              <input
++                id="companies"
++                v-model="selectedCompany"
++                class="jp-input"
++                type="text"
++                placeholder="E.g. Acme Corp"
++                @keydown.enter.prevent="addCompany"
++              />
++              <button type="button" class="jp-btn-secondary" @click="addCompany">Add</button>
++            </div>
++            <div class="role-chip-wrap">
++              <span v-for="company in selectedCompanies" :key="company" class="role-chip">
++                {{ company }}
++                <button type="button" aria-label="Remove company" @click="removeCompany(company)">脳</button>
++              </span>
++            </div>
++            <p v-if="!selectedCompanies.length" class="help-text">No companies added.</p>
+           </div>
+-          <p v-if="!selectedRoles.length" class="help-text">No roles selected yet.</p>
+-          <datalist id="role-options-list">
+-            <option v-for="role in roleOptions" :key="role" :value="role">
+-              {{ role }}
+-            </option>
+-          </datalist>
+-        </div>
+ 
+-        <div class="field">
+-          <label class="jp-label" for="companies">Target companies (optional)</label>
+-          <div class="role-input-row">
++          <div class="field">
++            <label class="jp-label" for="resume">Resume (optional PDF, less than 5MB)</label>
+             <input
+-              id="companies"
+-              v-model="selectedCompany"
++              id="resume"
++              ref="resumeInput"
+               class="jp-input"
+-              type="text"
+-              placeholder="E.g. Acme Corp"
+-              @keydown.enter.prevent="addCompany"
++              type="file"
++              accept="application/pdf,.pdf"
++              @change="onResumeSelected"
+             />
+-            <button type="button" class="jp-btn-secondary" @click="addCompany">Add</button>
+-          </div>
+-          <div class="role-chip-wrap">
+-            <span v-for="company in selectedCompanies" :key="company" class="role-chip">
+-              {{ company }}
+-              <button type="button" aria-label="Remove company" @click="removeCompany(company)">脳</button>
+-            </span>
++            <p class="help-text">Resume is optional but recommended.</p>
+           </div>
+-          <p v-if="!selectedCompanies.length" class="help-text">No companies added.</p>
+         </div>
+ 
+-        <div class="field">
+-          <label class="jp-label" for="resume">Resume (optional PDF, less than 5MB)</label>
+-          <input
+-            id="resume"
+-            ref="resumeInput"
+-            class="jp-input"
+-            type="file"
+-            accept="application/pdf,.pdf"
+-            @change="onResumeSelected"
+-          />
+-          <p class="help-text">Resume is optional but recommended.</p>
++        <div v-if="uiState === 'review' || uiState === 'locked'" class="review-section">
++          <div class="field">
++            <label class="jp-label">Job roles</label>
++            <div class="role-chip-wrap">
++              <span v-for="role in selectedRoles" :key="role" class="role-chip">
++                {{ role }}
++              </span>
++            </div>
++          </div>
++          <div class="field">
++            <label class="jp-label">Target companies</label>
++            <div class="role-chip-wrap">
++              <span v-for="company in selectedCompanies" :key="company" class="role-chip">
++                {{ company }}
++              </span>
++            </div>
++            <p v-if="!selectedCompanies.length" class="help-text">None</p>
++          </div>
++          <div class="field">
++            <label class="jp-label">Resume</label>
++            <p class="help-text">{{ resumeFile ? resumeFile.name : (hasResume ? 'Uploaded previously' : 'None') }}</p>
++          </div>
+         </div>
+ 
+         <div v-if="message" class="jp-success">{{ message }}</div>
+         <div v-if="errorMessage" class="jp-error" role="alert">{{ errorMessage }}</div>
+ 
+-        <button class="jp-btn" type="submit" :disabled="saving">
+-          {{ saving ? 'Saving...' : 'Save preferences' }}
+-        </button>
++        <div v-if="uiState === 'edit'">
++          <button class="jp-btn" type="button" @click="goToReview">
++            Review preferences
++          </button>
++        </div>
++        
++        <div v-if="uiState === 'review'" class="action-buttons">
++          <button class="jp-btn-secondary" type="button" @click="uiState = 'edit'" :disabled="saving">
++            Back to edit
++          </button>
++          <button class="jp-btn" type="submit" :disabled="saving">
++            {{ saving ? 'Saving...' : 'Final Submit' }}
++          </button>
++        </div>
++
++        <div v-if="uiState === 'locked'">
++          <p class="jp-success">Preferences have been locked.</p>
++        </div>
+       </form>
+     </main>
+   </div>
+@@ -93,6 +134,9 @@ const errorMessage = ref('')
+ const message = ref('')
+ const saving = ref(false)
+ 
++const uiState = ref('edit') // 'edit' | 'review' | 'locked'
++const hasResume = ref(false)
++
+ function authHeaders() {
+   const token = localStorage.getItem('access_token')
+   return token ? { Authorization: `Bearer ${token}` } : {}
+@@ -172,6 +216,12 @@ async function loadExistingStatus() {
+   selectedCompanies.value = Array.isArray(body.companies)
+     ? body.companies.filter((c) => typeof c === 'string' && c.trim())
+     : []
++  hasResume.value = body.has_resume || false
++  
++  if (body.is_locked) {
++    uiState.value = 'locked'
++  }
++
+   for (const role of selectedRoles.value) {
+     if (!roleOptions.value.includes(role)) {
+       roleOptions.value.push(role)
+@@ -179,6 +229,15 @@ async function loadExistingStatus() {
+   }
+ }
+ 
++function goToReview() {
++  errorMessage.value = ''
++  if (selectedRoles.value.length < 1) {
++    errorMessage.value = 'Add at least one job role.'
++    return
++  }
++  uiState.value = 'review'
++}
++
+ async function savePreferences() {
+   errorMessage.value = ''
+   message.value = ''
+@@ -198,6 +257,7 @@ async function savePreferences() {
+     if (resumeFile.value) {
+       formData.append('resume', resumeFile.value)
+     }
++    formData.append('is_locked', 'true')
+ 
+     const res = await fetch('/api/profile/preferences', {
+       method: 'POST',
+@@ -312,4 +372,22 @@ onMounted(() => {
+   font-size: 0.85rem;
+   color: var(--jp-text-muted);
+ }
++
++.review-section {
++  display: flex;
++  flex-direction: column;
++  gap: 1.5rem;
++  padding: 1rem;
++  background: rgba(255, 255, 255, 0.4);
++  border-radius: 12px;
++  border: 1px solid var(--jp-border-soft);
++}
++
++.action-buttons {
++  display: flex;
++  gap: 0.75rem;
++}
++.action-buttons .jp-btn, .action-buttons .jp-btn-secondary {
++  flex: 1;
++}
+ </style>
+diff --git a/frontend/src/views/WelcomeView.vue b/frontend/src/views/WelcomeView.vue
+index 219c55a..39c43b3 100644
+--- a/frontend/src/views/WelcomeView.vue
++++ b/frontend/src/views/WelcomeView.vue
+@@ -38,20 +38,6 @@
+           <div class="hero-glow-line" aria-hidden="true" />
+         </section>
+ 
+-        <aside class="soon" aria-labelledby="soon-heading">
+-          <div class="soon-head">
+-            <h2 id="soon-heading" class="soon-heading">Coming soon</h2>
+-            <span class="soon-badge">Roadmap</span>
+-          </div>
+-          <p class="soon-lead">
+-            Preferences and matches are on the way鈥攏othing to configure yet.
+-          </p>
+-          <ul class="soon-pills">
+-            <li><span class="pill-glow" aria-hidden="true" />Job roles you care about</li>
+-            <li><span class="pill-glow" aria-hidden="true" />Companies you want</li>
+-            <li><span class="pill-glow" aria-hidden="true" />Recommendations tuned to you</li>
+-          </ul>
+-        </aside>
+       </div>
+     </main>
+   </div>
+@@ -255,16 +241,14 @@ function logout() {
+ }
+ 
+ .landing-row {
+-  display: grid;
+-  grid-template-columns: minmax(0, 1fr) minmax(240px, 300px);
+-  gap: clamp(1.5rem, 4vw, 3rem);
+-  align-items: start;
++  display: flex;
++  justify-content: center;
++  align-items: center;
+   min-height: calc(100vh - 5.5rem);
+ }
+ 
+ @media (max-width: 900px) {
+   .landing-row {
+-    grid-template-columns: 1fr;
+     min-height: unset;
+   }
+ }
+@@ -274,7 +258,8 @@ function logout() {
+   display: flex;
+   flex-direction: column;
+   justify-content: center;
+-  align-items: flex-start;
++  align-items: center;
++  text-align: center;
+   padding-top: clamp(1rem, 4vh, 2.5rem);
+   animation: hero-in 0.9s ease-out both;
+ }
+@@ -320,7 +305,7 @@ function logout() {
+   margin: 0;
+   display: flex;
+   flex-direction: column;
+-  align-items: flex-start;
++  align-items: center;
+   gap: 0.02em;
+   line-height: 0.95;
+ }
+@@ -378,6 +363,7 @@ function logout() {
+ .hero-cta-row {
+   margin-top: 1.75rem;
+   display: flex;
++  justify-content: center;
+   flex-wrap: wrap;
+   gap: 0.75rem;
+ }
+@@ -430,95 +416,5 @@ function logout() {
+   box-shadow: 0 0 24px rgba(59, 130, 246, 0.35);
+ }
+ 
+-/* 鈥斺€?Coming soon (right rail) 鈥斺€?*/
+-.soon {
+-  margin: clamp(3.25rem, 8.5vh, 5.75rem) 0 0;
+-  width: 100%;
+-  padding: clamp(1rem, 3vh, 1.75rem) 0 clamp(1rem, 3vh, 1.75rem) clamp(1.25rem, 3vw, 2rem);
+-  border-left: 1px solid rgba(148, 163, 184, 0.28);
+-  animation: hero-in 0.9s ease-out 0.12s both;
+-  position: sticky;
+-  top: 1.25rem;
+-}
+-
+-@media (max-width: 900px) {
+-  .soon {
+-    margin-top: clamp(2.5rem, 5vh, 3.75rem);
+-    padding: clamp(3rem, 7vw, 3.75rem) 0 0;
+-    border-left: none;
+-    border-top: 1px solid rgba(148, 163, 184, 0.28);
+-    position: static;
+-  }
+-}
+-
+-.soon-head {
+-  display: flex;
+-  flex-wrap: wrap;
+-  align-items: center;
+-  gap: 0.75rem;
+-  margin-bottom: 0.65rem;
+-}
+-
+-.soon-heading {
+-  margin: 0;
+-  font-size: clamp(1.1rem, 2.5vw, 1.35rem);
+-  font-weight: 800;
+-  letter-spacing: -0.02em;
+-  color: #0f172a;
+-}
+ 
+-.soon-badge {
+-  font-size: 0.65rem;
+-  font-weight: 800;
+-  letter-spacing: 0.14em;
+-  text-transform: uppercase;
+-  color: #6366f1;
+-  padding: 0.35rem 0.65rem;
+-  border-radius: 999px;
+-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(56, 189, 248, 0.12));
+-  border: 1px solid rgba(99, 102, 241, 0.25);
+-}
+-
+-.soon-lead {
+-  margin: 0 0 1.1rem;
+-  max-width: none;
+-  font-size: 0.85rem;
+-  line-height: 1.55;
+-  color: #64748b;
+-}
+-
+-.soon-pills {
+-  list-style: none;
+-  margin: 0;
+-  padding: 0;
+-  display: flex;
+-  flex-direction: column;
+-  gap: 0.6rem;
+-}
+-
+-.soon-pills li {
+-  position: relative;
+-  display: flex;
+-  align-items: center;
+-  gap: 0.65rem;
+-  font-size: 0.82rem;
+-  font-weight: 700;
+-  color: #334155;
+-  padding: 0.7rem 0.95rem 0.7rem 0.75rem;
+-  border-radius: 14px;
+-  background: rgba(255, 255, 255, 0.72);
+-  border: 1px solid rgba(255, 255, 255, 0.95);
+-  box-shadow: 0 8px 32px -12px rgba(15, 23, 42, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+-  backdrop-filter: blur(12px);
+-  overflow: hidden;
+-}
+-
+-.pill-glow {
+-  flex-shrink: 0;
+-  width: 6px;
+-  height: 6px;
+-  border-radius: 50%;
+-  background: linear-gradient(135deg, #38bdf8, #a78bfa);
+-  box-shadow: 0 0 10px rgba(56, 189, 248, 0.8);
+-}
+ </style>
