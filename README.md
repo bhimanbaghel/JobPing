@@ -1,3 +1,4 @@
+
 # JobPing
 
 JobPing helps job seekers discover roles that match their preferences, stay notified when new postings appear, and keep track of applications—all in one place.
@@ -99,6 +100,7 @@ You need **both** servers running: Flask serves the JSON API; Vite serves the UI
 cd backend
 source .venv/bin/activate   # or Windows activate script above
 export FLASK_APP=wsgi:app
+flask db upgrade
 flask run
 ```
 
@@ -120,6 +122,113 @@ curl http://127.0.0.1:5000/api/health
 
 Expected: `{"status":"ok"}`.
 
+## Recommendations (FR6 / FR8 / FR9)
+
+The recommendation engine lives in `backend/app/services/` and is exposed
+through the `jobs` blueprint:
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET`  | `/api/jobs/recommendations`            | Sorted Table-3 rows for the caller. Lazily computes when empty. `?recompute=1` forces a fresh run. |
+| `POST` | `/api/jobs/recommendations/recompute`  | Force a recompute (use after preferences/resume change). |
+| `GET`  | `/api/jobs/<id>`                       | Full job detail for the details modal. |
+
+All three require a JWT in `Authorization: Bearer ...`.
+
+### Post-login preference gate
+
+After sign-in, JobPing checks `GET /api/profile/preferences/status`:
+
+- If at least one preferred role exists, the user is redirected to `/recommendations`.
+- If not, the user is redirected to `/preferences` first.
+
+The preferences form saves through `POST /api/profile/preferences` and enforces:
+
+- `roles[]` is required with at least one non-empty value.
+- `resume` is optional but recommended.
+- If a resume is provided, it must be a PDF and less than 5MB.
+- The backend stores parsed resume text in `resumes.parsed_text` (not raw PDF bytes).
+
+### How matching works
+
+1. Read `user_preferences` for the caller. **At least one role** is required (FR6.1) — otherwise the API returns `400 {"code": "missing_role_preferences"}`.
+2. Filter `jobs` by standardized role match (always) and company match (when companies are set).
+3. If no resume exists:
+   - vector logic is bypassed entirely;
+   - candidates are ranked by recency (`posted_at` desc, then `created_at` desc);
+   - score is set to `1.0` (100%) for each returned row.
+4. If a resume exists:
+   - build a resume embedding from normalized resume text plus extracted key terms;
+   - build/fetch each job embedding from `role + company + description`;
+   - compute a raw hybrid score:
+     - `semantic = (cosine + 1) / 2`
+     - `overlap = |resume_terms ∩ job_terms| / |resume_terms|`
+     - `raw = 0.70 * semantic + 0.30 * overlap`
+   - sort by `raw` descending.
+5. Calibrate resume-mode display scores to a user-friendly range while preserving ranking order:
+   - `calibrated = 0.55 + ((raw - min_raw) / (max_raw - min_raw)) * (0.98 - 0.55)`
+   - if all raw scores are equal, apply a very small rank-based decay from `0.98` down toward `0.55`.
+6. Apply a resume-mode threshold and keep only rows with `score >= 0.80` (default `SIMILARITY_THRESHOLD`).
+7. Persist results into `recommendations` and return rows sorted by recency (`posted_at`, then `created_at`). Similarity score is used for filtering/scoring, not final ordering.
+
+### Local Postgres + pgvector
+
+Production runs on PostgreSQL with the [pgvector](https://github.com/pgvector/pgvector) extension. On macOS:
+
+```bash
+brew install pgvector
+```
+
+The Alembic migration runs `CREATE EXTENSION IF NOT EXISTS vector` automatically on Postgres connections. Tests run on in-memory SQLite using a JSON fallback column type, so you don't need pgvector to develop locally if you stick to SQLite.
+
+### Embedding backends
+
+Set `EMBEDDING_BACKEND` in `backend/.env`:
+
+- `sbert` (default) — downloads `sentence-transformers/all-MiniLM-L6-v2` (~90 MB) on first use. Real semantic similarity.
+- `hashing` — deterministic SHA1 token-hashing fallback. Used by the test suite and any environment without network access.
+- `PRELOAD_EMBEDDING_MODEL=1` (default) — preloads SBERT during backend startup and caches model files under `backend/.cache/sentence_transformers`, so weights are downloaded once and reused on subsequent runs.
+
+### Seeding demo data
+
+```bash
+cd backend
+source .venv/bin/activate
+python -m scripts.seed_recommendations
+```
+
+This upserts a demo user (`demo@jobping.test` / `DemoPass-1234567890!`), four sample jobs, the demo preferences, and a matching resume, then runs the recommender.
+
+### Running the tests
+
+```bash
+cd backend
+source .venv/bin/activate
+EMBEDDING_BACKEND=hashing PYTHONPATH=. pytest -q
+```
+
+### Manual frontend verification checklist
+
+1. Login with a brand-new account and confirm redirect to `/preferences`.
+2. Try saving with no role and confirm validation appears.
+3. Try uploading a non-PDF or file larger than 5MB and confirm validation appears.
+4. Save at least one role (with or without resume) and confirm redirect to `/recommendations`.
+5. Logout and login again with the same account; confirm direct redirect to `/recommendations`.
+
+## Team Members and Contributions
+
+- **Bhiman Baghel**
+- **Lakshay Agarwal**
+- **Leo Zhao**
+
+## Implemented Features
+
+- **User Profile Setup**: Allows users to input preferred job roles, optional companies, and upload a resume to match against job listings.
+- **Login Authentication Endpoint**: Secure authentication utilizing JWT, featuring account lockout mechanisms to guard against brute-force attacks.
+- **Preferences Confirmation Lock**: Adds a review step confirming preferences. Once submitted, these preferences are locked to ensure clear tracking.
+- **Optional Companies Preferences**: A refinement that makes "preferred companies" non-mandatory, preventing user blocking when no strict company bias exists.
+- **Remove Coming Soon Section**: Cleanup in the frontend views to prepare the application for real feature toggles and production layouts under the Welcome dashboard.
+
 ## Working with the team on Git
 
 1. **Pull before you start** so you have the latest `main` (or your shared integration branch):
@@ -133,6 +242,9 @@ Expected: `{"status":"ok"}`.
 3. **After pulling**, if dependencies changed, re-run `pip install -r backend/requirements.txt` and/or `npm install` in `frontend/`.
 
 4. Never commit secrets, virtualenvs (`.venv/`), or `frontend/node_modules/` — they are covered by `.gitignore`.
+
+## License
+
 
 ## License
 

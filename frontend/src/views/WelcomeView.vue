@@ -28,10 +28,16 @@
 
           <p v-if="userEmail" class="hero-email">{{ userEmail }}</p>
 
+          <div class="hero-cta-row">
+            <router-link to="/recommendations" class="hero-cta">
+              View recommendations
+              <span class="hero-cta-arrow" aria-hidden="true">→</span>
+            </router-link>
+          </div>
+
           <div class="hero-glow-line" aria-hidden="true" />
         </section>
 
-        <!-- The "Coming Soon" section was removed here to prepare the WelcomeView for future feature toggles -->
       </div>
     </main>
   </div>
@@ -235,19 +241,25 @@ function logout() {
 }
 
 .landing-row {
-  display: grid;
-  grid-template-columns: 1fr;
-  align-items: start;
+  display: flex;
+  justify-content: center;
+  align-items: center;
   min-height: calc(100vh - 5.5rem);
 }
 
+@media (max-width: 900px) {
+  .landing-row {
+    min-height: unset;
+  }
+}
 
 .hero {
   min-height: min(72vh, 600px);
   display: flex;
   flex-direction: column;
   justify-content: center;
-  align-items: flex-start;
+  align-items: center;
+  text-align: center;
   padding-top: clamp(1rem, 4vh, 2.5rem);
   animation: hero-in 0.9s ease-out both;
 }
@@ -293,7 +305,7 @@ function logout() {
   margin: 0;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
   gap: 0.02em;
   line-height: 0.95;
 }
@@ -348,6 +360,46 @@ function logout() {
   backdrop-filter: blur(14px);
 }
 
+.hero-cta-row {
+  margin-top: 1.75rem;
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.hero-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.85rem 1.5rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #fff;
+  text-decoration: none;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #2563eb, #6366f1 55%, #06b6d4);
+  box-shadow: 0 18px 36px -12px rgba(37, 99, 235, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.hero-cta:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 24px 44px -14px rgba(37, 99, 235, 0.65),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.hero-cta-arrow {
+  font-weight: 800;
+  transition: transform 0.15s ease;
+}
+
+.hero-cta:hover .hero-cta-arrow {
+  transform: translateX(3px);
+}
+
 .hero-glow-line {
   width: min(100%, 520px);
   height: 3px;
@@ -363,5 +415,6 @@ function logout() {
   );
   box-shadow: 0 0 24px rgba(59, 130, 246, 0.35);
 }
+
 
 </style>
