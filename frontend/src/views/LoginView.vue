@@ -64,6 +64,19 @@ const errorMessage = ref('')
 const router = useRouter()
 const route = useRoute()
 
+async function hasPreferences(accessToken) {
+  try {
+    const statusRes = await fetch('/api/profile/preferences/status', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+    if (!statusRes.ok) return false
+    const status = await statusRes.json()
+    return Boolean(status?.has_preferences)
+  } catch {
+    return false
+  }
+}
+
 const handleLogin = async () => {
   errorMessage.value = ''
 
@@ -95,10 +108,16 @@ const handleLogin = async () => {
       localStorage.setItem('refresh_token', data.refresh_token)
     }
 
-    const rawNext = typeof route.query.next === 'string' ? route.query.next : '/welcome'
+    const rawNext = typeof route.query.next === 'string' ? route.query.next : ''
     const safeNext =
-      rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : '/welcome'
-    router.push(safeNext)
+      rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : ''
+
+    const preferenceExists = await hasPreferences(data.access_token)
+    if (safeNext) {
+      router.push(safeNext)
+      return
+    }
+    router.push(preferenceExists ? '/recommendations' : '/preferences')
   } catch (error) {
     errorMessage.value = error.message
   }
