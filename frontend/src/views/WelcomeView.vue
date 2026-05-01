@@ -28,6 +28,13 @@
 
           <p v-if="userEmail" class="hero-email">{{ userEmail }}</p>
 
+          <div class="hero-cta-row">
+            <router-link to="/recommendations" class="hero-cta">
+              View recommendations
+              <span class="hero-cta-arrow" aria-hidden="true">→</span>
+            </router-link>
+          </div>
+
           <div class="hero-glow-line" aria-hidden="true" />
         </section>
 
@@ -366,6 +373,45 @@ function logout() {
   border: 1px solid rgba(255, 255, 255, 0.9);
   box-shadow: 0 4px 24px -8px rgba(15, 23, 42, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(14px);
+}
+
+.hero-cta-row {
+  margin-top: 1.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.hero-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.85rem 1.5rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #fff;
+  text-decoration: none;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #2563eb, #6366f1 55%, #06b6d4);
+  box-shadow: 0 18px 36px -12px rgba(37, 99, 235, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.hero-cta:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 24px 44px -14px rgba(37, 99, 235, 0.65),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.hero-cta-arrow {
+  font-weight: 800;
+  transition: transform 0.15s ease;
+}
+
+.hero-cta:hover .hero-cta-arrow {
+  transform: translateX(3px);
 }
 
 .hero-glow-line {
