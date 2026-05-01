@@ -28,23 +28,16 @@
 
           <p v-if="userEmail" class="hero-email">{{ userEmail }}</p>
 
+          <div class="hero-cta-row">
+            <router-link to="/recommendations" class="hero-cta">
+              View recommendations
+              <span class="hero-cta-arrow" aria-hidden="true">→</span>
+            </router-link>
+          </div>
+
           <div class="hero-glow-line" aria-hidden="true" />
         </section>
 
-        <aside class="soon" aria-labelledby="soon-heading">
-          <div class="soon-head">
-            <h2 id="soon-heading" class="soon-heading">Coming soon</h2>
-            <span class="soon-badge">Roadmap</span>
-          </div>
-          <p class="soon-lead">
-            Preferences and matches are on the way—nothing to configure yet.
-          </p>
-          <ul class="soon-pills">
-            <li><span class="pill-glow" aria-hidden="true" />Job roles you care about</li>
-            <li><span class="pill-glow" aria-hidden="true" />Companies you want</li>
-            <li><span class="pill-glow" aria-hidden="true" />Recommendations tuned to you</li>
-          </ul>
-        </aside>
       </div>
     </main>
   </div>
@@ -248,16 +241,14 @@ function logout() {
 }
 
 .landing-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(240px, 300px);
-  gap: clamp(1.5rem, 4vw, 3rem);
-  align-items: start;
+  display: flex;
+  justify-content: center;
+  align-items: center;
   min-height: calc(100vh - 5.5rem);
 }
 
 @media (max-width: 900px) {
   .landing-row {
-    grid-template-columns: 1fr;
     min-height: unset;
   }
 }
@@ -267,7 +258,8 @@ function logout() {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  align-items: flex-start;
+  align-items: center;
+  text-align: center;
   padding-top: clamp(1rem, 4vh, 2.5rem);
   animation: hero-in 0.9s ease-out both;
 }
@@ -313,7 +305,7 @@ function logout() {
   margin: 0;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
   gap: 0.02em;
   line-height: 0.95;
 }
@@ -368,6 +360,46 @@ function logout() {
   backdrop-filter: blur(14px);
 }
 
+.hero-cta-row {
+  margin-top: 1.75rem;
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.hero-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.85rem 1.5rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #fff;
+  text-decoration: none;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #2563eb, #6366f1 55%, #06b6d4);
+  box-shadow: 0 18px 36px -12px rgba(37, 99, 235, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.hero-cta:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 24px 44px -14px rgba(37, 99, 235, 0.65),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.hero-cta-arrow {
+  font-weight: 800;
+  transition: transform 0.15s ease;
+}
+
+.hero-cta:hover .hero-cta-arrow {
+  transform: translateX(3px);
+}
+
 .hero-glow-line {
   width: min(100%, 520px);
   height: 3px;
@@ -384,95 +416,5 @@ function logout() {
   box-shadow: 0 0 24px rgba(59, 130, 246, 0.35);
 }
 
-/* —— Coming soon (right rail) —— */
-.soon {
-  margin: clamp(3.25rem, 8.5vh, 5.75rem) 0 0;
-  width: 100%;
-  padding: clamp(1rem, 3vh, 1.75rem) 0 clamp(1rem, 3vh, 1.75rem) clamp(1.25rem, 3vw, 2rem);
-  border-left: 1px solid rgba(148, 163, 184, 0.28);
-  animation: hero-in 0.9s ease-out 0.12s both;
-  position: sticky;
-  top: 1.25rem;
-}
 
-@media (max-width: 900px) {
-  .soon {
-    margin-top: clamp(2.5rem, 5vh, 3.75rem);
-    padding: clamp(3rem, 7vw, 3.75rem) 0 0;
-    border-left: none;
-    border-top: 1px solid rgba(148, 163, 184, 0.28);
-    position: static;
-  }
-}
-
-.soon-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 0.65rem;
-}
-
-.soon-heading {
-  margin: 0;
-  font-size: clamp(1.1rem, 2.5vw, 1.35rem);
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  color: #0f172a;
-}
-
-.soon-badge {
-  font-size: 0.65rem;
-  font-weight: 800;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: #6366f1;
-  padding: 0.35rem 0.65rem;
-  border-radius: 999px;
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(56, 189, 248, 0.12));
-  border: 1px solid rgba(99, 102, 241, 0.25);
-}
-
-.soon-lead {
-  margin: 0 0 1.1rem;
-  max-width: none;
-  font-size: 0.85rem;
-  line-height: 1.55;
-  color: #64748b;
-}
-
-.soon-pills {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-}
-
-.soon-pills li {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-  font-size: 0.82rem;
-  font-weight: 700;
-  color: #334155;
-  padding: 0.7rem 0.95rem 0.7rem 0.75rem;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba(255, 255, 255, 0.95);
-  box-shadow: 0 8px 32px -12px rgba(15, 23, 42, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(12px);
-  overflow: hidden;
-}
-
-.pill-glow {
-  flex-shrink: 0;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #38bdf8, #a78bfa);
-  box-shadow: 0 0 10px rgba(56, 189, 248, 0.8);
-}
 </style>
