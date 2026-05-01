@@ -257,6 +257,15 @@ function goToReview() {
   uiState.value = 'review'
 }
 
+function goToReview() {
+  errorMessage.value = ''
+  if (selectedRoles.value.length < 1) {
+    errorMessage.value = 'Add at least one job role.'
+    return
+  }
+  uiState.value = 'review'
+}
+
 async function savePreferences() {
   errorMessage.value = ''
   message.value = ''

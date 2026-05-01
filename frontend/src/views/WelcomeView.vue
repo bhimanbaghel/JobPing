@@ -37,7 +37,7 @@
 
           <div class="hero-glow-line" aria-hidden="true" />
         </section>
-        <!-- The "Coming Soon" section was removed here to prepare the WelcomeView for future feature toggles -->
+
       </div>
     </main>
   </div>
@@ -241,16 +241,14 @@ function logout() {
 }
 
 .landing-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(240px, 300px);
-  gap: clamp(1.5rem, 4vw, 3rem);
-  align-items: start;
+  display: flex;
+  justify-content: center;
+  align-items: center;
   min-height: calc(100vh - 5.5rem);
 }
 
 @media (max-width: 900px) {
   .landing-row {
-    grid-template-columns: 1fr;
     min-height: unset;
   }
 }
@@ -260,7 +258,8 @@ function logout() {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  align-items: flex-start;
+  align-items: center;
+  text-align: center;
   padding-top: clamp(1rem, 4vh, 2.5rem);
   animation: hero-in 0.9s ease-out both;
 }
@@ -306,7 +305,7 @@ function logout() {
   margin: 0;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
   gap: 0.02em;
   line-height: 0.95;
 }
@@ -364,6 +363,7 @@ function logout() {
 .hero-cta-row {
   margin-top: 1.75rem;
   display: flex;
+  justify-content: center;
   flex-wrap: wrap;
   gap: 0.75rem;
 }
@@ -415,5 +415,6 @@ function logout() {
   );
   box-shadow: 0 0 24px rgba(59, 130, 246, 0.35);
 }
+
 
 </style>

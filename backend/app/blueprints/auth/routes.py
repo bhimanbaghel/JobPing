@@ -108,11 +108,15 @@ def login():
     if not user:
         return jsonify({"error": "Invalid email or password."}), 401
 
+    # Check if account is locked due to too many prior failed login attempts
+    # Check if account is locked due to too many prior failed login attempts
     if user.failed_login_attempts >= 5:
         return jsonify({
             "error": "Account locked due to too many failed attempts. Contact support at bkb45@pitt.edu.",
         }), 403
 
+    # Verify password against securely hashed NIST-validated password
+    # Verify password against securely hashed NIST-validated password
     if not check_password_hash(user.password_hash, password):
         user.failed_login_attempts += 1
         db.session.commit()
