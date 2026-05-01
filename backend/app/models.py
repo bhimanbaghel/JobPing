@@ -74,7 +74,7 @@ class User(db.Model):
 # (and so Alembic can autogenerate sensible migrations for local dev).
 # ─────────────────────────────────────────────────────────────────────────────
 class Job(db.Model):
-    """STUB: owned by Lakshay (Table 1 — parser output).
+    """Owned by scraping pipeline + consumed by recommender.
 
     Keep field names in sync with the contract in
     `docs/contracts/jobs_table.md`.
@@ -84,6 +84,7 @@ class Job(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     role = db.Column(db.String(255), nullable=False, index=True)
     company = db.Column(db.String(255), nullable=False, index=True)
+    external_id = db.Column(db.String(255), nullable=True)
     description = db.Column(db.Text, nullable=False)
     link = db.Column(db.String(2048), nullable=True)
     city = db.Column(db.String(120), nullable=True)
@@ -91,10 +92,20 @@ class Job(db.Model):
     country = db.Column(db.String(120), nullable=True)
     salary_usd = db.Column(db.Numeric(12, 2), nullable=True)
     posted_at = db.Column(db.Date, nullable=True)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    last_seen_at = db.Column(db.DateTime(timezone=True))
     created_at = db.Column(
         db.DateTime(timezone=True),
         default=_utcnow,
         nullable=False,
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "company",
+            "external_id",
+            name="uq_jobs_company_external_id",
+        ),
     )
 
     def __repr__(self):

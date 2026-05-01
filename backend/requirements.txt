@@ -8,3 +8,4 @@ Flask-Migrate>=4.0.0
 numpy>=1.26
 sentence-transformers>=2.7
 pypdf>=4.2
+requests>=2.31.0
