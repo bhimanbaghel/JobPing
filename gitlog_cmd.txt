@@ -1,0 +1,10 @@
+f8f8fa0 feat: make companies optional in preferences
+42baa8a fix(recs): calibrate resume scoring with threshold and recency-first ordering
+d7786c9 fix(scraper+recs): clean job descriptions and stabilize recency ordering
+0e7a81d fix(recs): separate role-only listing from resume vector ranking
+3c8b419 fix(embeddings): preload SBERT at startup with local disk cache
+aff7f86 feat(profile): standardize role options and pill-based role picker
+8585bac fix(migrations): merge heads and make jobs migration idempotent
+4a75fda Merge origin/feature/scraper-runner into feature/recs-scraper-integration
+a0b1881 Implemented scraper logic and data handler
+5e84553 Set up parser, limited to ATS based companies
