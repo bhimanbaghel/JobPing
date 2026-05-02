@@ -4,6 +4,7 @@
       <router-link to="/welcome" class="recs-nav-logo">JobPing</router-link>
       <div class="recs-nav-right">
         <router-link to="/welcome" class="recs-nav-link">Home</router-link>
+        <router-link to="/preferences" class="recs-nav-link">Preferences</router-link>
         <button type="button" class="recs-nav-out" @click="logout">Sign out</button>
       </div>
     </header>

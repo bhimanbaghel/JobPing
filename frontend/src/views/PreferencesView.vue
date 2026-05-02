@@ -71,7 +71,7 @@
           </div>
         </div>
 
-        <div v-if="uiState === 'review' || uiState === 'locked'" class="review-section">
+        <div v-if="uiState === 'review'" class="review-section">
           <div class="field">
             <label class="jp-label">Job roles</label>
             <div class="role-chip-wrap">
@@ -112,10 +112,6 @@
             {{ saving ? 'Saving...' : 'Final Submit' }}
           </button>
         </div>
-
-        <div v-if="uiState === 'locked'">
-          <p class="jp-success">Preferences have been locked.</p>
-        </div>
       </form>
     </main>
   </div>
@@ -138,7 +134,7 @@ const errorMessage = ref('')
 const message = ref('')
 const saving = ref(false)
 
-const uiState = ref('edit') // 'edit' | 'review' | 'locked'
+const uiState = ref('edit') // 'edit' | 'review'
 const hasResume = ref(false)
 
 function authHeaders() {
@@ -230,10 +226,6 @@ async function loadExistingStatus() {
     ? body.companies.filter((c) => typeof c === 'string' && c.trim())
     : []
   hasResume.value = body.has_resume || false
-  
-  if (body.is_locked) {
-    uiState.value = 'locked'
-  }
 
   for (const role of selectedRoles.value) {
     if (!roleOptions.value.includes(role)) {
@@ -246,15 +238,6 @@ async function loadExistingStatus() {
       companyOptions.value.push(company)
     }
   }
-}
-
-function goToReview() {
-  errorMessage.value = ''
-  if (selectedRoles.value.length < 1) {
-    errorMessage.value = 'Add at least one job role.'
-    return
-  }
-  uiState.value = 'review'
 }
 
 function goToReview() {
@@ -285,8 +268,6 @@ async function savePreferences() {
     if (resumeFile.value) {
       formData.append('resume', resumeFile.value)
     }
-    formData.append('is_locked', 'true')
-
     const res = await fetch('/api/profile/preferences', {
       method: 'POST',
       headers: authHeaders(),

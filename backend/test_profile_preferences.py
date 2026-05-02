@@ -5,7 +5,7 @@ import io
 import pytest
 
 from app import create_app
-from app.models import Job, Resume, UserPreference, db
+from app.models import Job, Recommendation, Resume, UserPreference, db
 
 
 @pytest.fixture()
@@ -207,33 +207,83 @@ def test_company_options_returns_standardized_companies(client, app):
     assert "Globex" in companies
 
 
-def test_lock_preferences_and_prevent_modification(client, app):
+def test_save_preferences_can_be_modified_after_first_save(client, app):
+    """Re-saving preferences must succeed — there is no lock blocking edits."""
     token = register_and_token(client)
-    # 1. Save and lock
-    r = client.post(
+
+    r1 = client.post(
         "/api/profile/preferences",
         headers=auth_headers(token),
-        data={"roles": ["Backend Engineer"], "is_locked": "true"},
+        data={"roles": ["Backend Engineer"]},
     )
-    assert r.status_code == 200
-    
-    with app.app_context():
-        pref = db.session.query(UserPreference).one()
-        assert pref.roles == ["Backend Engineer"]
-        assert pref.is_locked is True
+    assert r1.status_code == 200
 
-    # 2. Try to modify again
-    r_modify = client.post(
+    r2 = client.post(
         "/api/profile/preferences",
         headers=auth_headers(token),
         data={"roles": ["Data Engineer"]},
     )
-    assert r_modify.status_code == 403
-    assert "locked" in r_modify.get_json()["error"].lower()
+    assert r2.status_code == 200
 
-    # 3. Check status
-    r_status = client.get("/api/profile/preferences/status", headers=auth_headers(token))
-    assert r_status.status_code == 200
-    body = r_status.get_json()
-    assert body["is_locked"] is True
+    with app.app_context():
+        pref = db.session.query(UserPreference).one()
+        assert pref.roles == ["Data Engineer"]
+
+
+def test_save_preferences_invalidates_cached_recommendations(client, app, monkeypatch):
+    """Saving preferences must wipe cached `recommendations` rows so the next
+    GET recomputes against the new resume / roles / companies."""
+    token = register_and_token(client)
+
+    def _fake_extract(_file_bytes):
+        return "python flask postgres"
+
+    monkeypatch.setattr(
+        "app.blueprints.profile.routes.extract_text_from_pdf_bytes",
+        _fake_extract,
+    )
+
+    # First save: creates user + preferences + resume.
+    r = client.post(
+        "/api/profile/preferences",
+        headers=auth_headers(token),
+        data={
+            "roles": ["Backend Engineer"],
+            "resume": (io.BytesIO(b"%PDF-1.4 fake"), "resume.pdf"),
+        },
+        content_type="multipart/form-data",
+    )
+    assert r.status_code == 200
+
+    # Seed a cached recommendation row as if recommend_for_user had run.
+    with app.app_context():
+        pref = db.session.query(UserPreference).one()
+        user_id = pref.user_id
+        job = Job(role="Backend Engineer", company="Acme", description="d")
+        db.session.add(job)
+        db.session.flush()
+        db.session.add(
+            Recommendation(user_id=user_id, job_id=job.id, similarity_score=0.9)
+        )
+        db.session.commit()
+        assert db.session.query(Recommendation).filter_by(user_id=user_id).count() == 1
+
+    # Second save: even just role changes must invalidate the cache.
+    r2 = client.post(
+        "/api/profile/preferences",
+        headers=auth_headers(token),
+        data={"roles": ["Data Engineer"]},
+    )
+    assert r2.status_code == 200
+
+    with app.app_context():
+        assert db.session.query(Recommendation).filter_by(user_id=user_id).count() == 0
+
+
+def test_preferences_status_does_not_expose_is_locked(client):
+    """The deprecated is_locked flag must not appear in the status payload."""
+    token = register_and_token(client)
+    r = client.get("/api/profile/preferences/status", headers=auth_headers(token))
+    assert r.status_code == 200
+    assert "is_locked" not in r.get_json()
 
